@@ -1,0 +1,27 @@
+llm:
+  provider: "openai_compatible"
+  base_url: "https://api.openai.com/v1"
+  api_key: "${OPENAI_API_KEY}"
+  model: "gpt-4o"
+  temperature: 0.3
+  max_tokens: 4096
+  retry_count: 2
+
+excel:
+  action_column_candidates:
+    - "操作类型"
+    - "操作"
+    - "变更事项"
+    - "变更类型"
+  app_column_candidates:
+    - "APPID"
+    - "应用"
+    - "应用名称"
+  skip_sheets:
+    - "变更安排"
+
+mapping:
+  rules_file: "./mapping_rules.md"
+
+word:
+  output_dir: "./output"

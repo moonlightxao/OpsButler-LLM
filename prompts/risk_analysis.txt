@@ -1,0 +1,31 @@
+请根据以下变更内容，生成实施方案的风险分析部分（第3-5章）。
+
+## 变更步骤概要
+{steps_summary}
+
+## 输出要求
+请输出严格的JSON，格式如下：
+{{
+  "verification_plan": {{
+    "verification_steps": ["验证步骤1", "验证步骤2", ...]
+  }},
+  "rollback_plan": {{
+    "rollback_steps": ["回退步骤1", "回退步骤2", ...]
+  }},
+  "risk_analysis": {{
+    "risks": [
+      {{
+        "risk_description": "风险描述",
+        "probability": "高/中/低",
+        "impact": "高/中/低",
+        "mitigation": "规避措施"
+      }}
+    ]
+  }}
+}}
+
+注意：
+- verification_steps 应覆盖每个变更步骤的验证方法
+- rollback_steps 应按倒序排列（最后变更的先回退）
+- risks 应识别主要风险并给出具体的规避措施
+- 概率和影响只能填"高"、"中"或"低"

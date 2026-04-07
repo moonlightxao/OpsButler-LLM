@@ -1,0 +1,37 @@
+请根据以下映射规则和Excel数据，将Excel中的每一行数据分配到对应的平台变更步骤。
+
+## 映射规则
+{mapping_rules}
+
+## Excel数据
+{excel_data}
+
+## 输出要求
+请输出严格的JSON，格式如下：
+{{
+  "step_mappings": [
+    {{
+      "step_name": "平台步骤名",
+      "source_sheet": "来源Sheet名",
+      "row_indices": [0, 1, 2],
+      "description": "该步骤的操作描述（来自映射规则）",
+      "notes": "补充说明（可选）"
+    }}
+  ],
+  "task_table": [
+    {{
+      "sequence": 1,
+      "task_name": "任务名称（即平台步骤名）",
+      "start_time": "",
+      "end_time": "",
+      "operator": "从数据中提取的实施人",
+      "reviewer": "从数据中提取的复核人"
+    }}
+  ]
+}}
+
+注意：
+- row_indices 是数据行的索引（从0开始，不包括表头行）
+- 一个Excel Sheet可以映射到多个平台步骤（如ROMA任务与事件需拆分为ROMA任务和ROMA事件）
+- task_table中的每一行对应实施总表中的一个任务，按照实际变更逻辑排序
+- 实施总表的顺序建议：数据库脚本 → 应用配置 → MQS配置 → 容器配置 → 代码部署 → ROMA任务/事件
