@@ -14,6 +14,7 @@ class LLMConfig:
     temperature: float = 0.3
     max_tokens: int = 4096
     retry_count: int = 2
+    think: bool = False
 
 
 @dataclass
@@ -80,6 +81,7 @@ def _dict_to_config(data: dict) -> Config:
             temperature=float(llm_data.get("temperature", 0.3)),
             max_tokens=int(llm_data.get("max_tokens", 4096)),
             retry_count=int(llm_data.get("retry_count", 2)),
+            think=bool(llm_data.get("think", False)),
         ),
         excel=ExcelConfig(
             action_column_candidates=excel_data.get("action_column_candidates", ["操作类型", "操作", "变更事项", "变更类型"]),

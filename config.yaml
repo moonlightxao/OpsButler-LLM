@@ -1,11 +1,12 @@
 llm:
-  provider: "openai_compatible"
-  base_url: "https://api.openai.com/v1"
+  provider: "ollama"
+  base_url: "http://localhost:11434"
   api_key: "${OPENAI_API_KEY}"
-  model: "gpt-4o"
+  model: "qwen3.5:4b"
   temperature: 0.3
   max_tokens: 4096
   retry_count: 2
+  think: false
 
 excel:
   action_column_candidates:

@@ -69,6 +69,7 @@ class OllamaClient(LLMClient):
         self.model = config.model
         self.temperature = config.temperature
         self.retry_count = config.retry_count
+        self.think = config.think
 
     def chat(self, messages: list[dict]) -> str:
         url = f"{self.host}/api/chat"
@@ -79,6 +80,7 @@ class OllamaClient(LLMClient):
             "options": {
                 "temperature": self.temperature,
             },
+            "think": self.think,
         }
 
         last_error = None
@@ -87,7 +89,10 @@ class OllamaClient(LLMClient):
                 resp = requests.post(url, json=payload, timeout=300)
                 resp.raise_for_status()
                 data = resp.json()
-                return data["message"]["content"]
+                content = data["message"]["content"]
+                if not content or content.strip() in ("", "..."):
+                    logger.debug(f"Ollama returned empty content, full response keys: {list(data.keys())}, message keys: {list(data['message'].keys())}")
+                return content
             except Exception as e:
                 last_error = e
                 logger.warning(f"Ollama request attempt {attempt + 1} failed: {e}")

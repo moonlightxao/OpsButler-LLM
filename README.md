@@ -19,10 +19,12 @@
 
 - Python 3.10+
 
-### 安装依赖
+### 安装
+
+在项目根目录下以开发模式安装：
 
 ```bash
-pip install -r requirements.txt
+pip install -e .
 ```
 
 依赖列表：
