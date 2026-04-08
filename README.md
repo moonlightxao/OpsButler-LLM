@@ -12,6 +12,8 @@
 - **程序化 Word 构建** — 动态生成多级标题、按步骤分组的操作表格，适配不同规模的上线内容
 - **多 LLM 后端** — 支持 OpenAI 兼容 API 和 Ollama 本地模型
 - **可扩展规则** — 平台新增变更步骤类型时，只需更新 `mapping_rules.md` 文件
+- **MCP Server** — 可作为本地 MCP Server 接入 Claude Code 等 AI Agent，通过工具调用生成方案
+- **Agent Skill** — 配套 Skill 描述文件，Agent 可自动识别并调用
 
 ## 前置准备
 
@@ -36,6 +38,7 @@ pip install -e .
 | pydantic | 数据模型验证 |
 | requests | LLM API 调用 |
 | pyyaml | 配置文件加载 |
+| mcp | MCP Server SDK |
 
 ## 配置指导
 
@@ -146,6 +149,39 @@ python -m opsbutler -e input/checklist.xlsx -o output/plan.docx -c my_config.yam
 python -m opsbutler -e sample/上线checklist.xlsx -o output/test.docx --log-level DEBUG
 ```
 
+## 作为 MCP Server 使用
+
+OpsButler-LLM 可作为 MCP Server 接入 Claude Code 等 AI Agent，Agent 通过工具调用直接生成部署方案。
+
+### 启动 MCP Server
+
+```bash
+python -m opsbutler.mcp_server
+```
+
+Server 以 stdio 传输模式运行，暴露 `generate_deployment_plan` 工具。
+
+### 工具参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `excel_path` | string | 是 | Excel 上线清单文件路径 |
+| `output_path` | string | 是 | 输出 Word 文件路径 |
+
+### 在 Claude Code 中配置
+
+项目根目录已包含 `.mcp.json` 配置文件。在 Claude Code 中进入项目目录即可自动加载。
+
+或手动添加：
+
+```bash
+claude mcp add opsbutler -- python3 -m opsbutler.mcp_server
+```
+
+### Agent Skill
+
+`.claude/skills/opsbutler-deployment-plan/SKILL.md` 提供了 Agent Skill 描述，Claude Code 会自动识别并在用户提到上线清单、部署方案等关键词时触发。
+
 ## 项目结构
 
 ```
@@ -165,10 +201,14 @@ OpsButler-LLM/
 │   ├── excel_parser.py        # 动态 Excel 解析
 │   ├── llm_client.py          # LLM 客户端（requests）
 │   ├── plan_generator.py      # LLM 调用编排（3次调用）
-│   └── word_generator.py      # Word 文档构建
+│   ├── word_generator.py      # Word 文档构建
+│   └── mcp_server.py          # MCP Server（Agent 工具接口）
 ├── sample/                    # 示例文件
 │   ├── 上线checklist.xlsx     # 示例 Excel 上线清单
 │   └── 测试文档.docx          # 目标 Word 格式参考
+├── .mcp.json                  # Claude Code MCP Server 配置
+├── .claude/skills/opsbutler-deployment-plan/
+│   └── SKILL.md               # Agent Skill 描述
 └── output/                    # 输出目录
 ```
 

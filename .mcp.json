@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "opsbutler": {
+      "command": "python3",
+      "args": ["-m", "opsbutler.mcp_server"],
+      "cwd": "/root/projects/OpsButler-LLM"
+    }
+  }
+}
