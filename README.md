@@ -12,8 +12,8 @@
 - **程序化 Word 构建** — 动态生成多级标题、按步骤分组的操作表格，适配不同规模的上线内容
 - **多 LLM 后端** — 支持 OpenAI 兼容 API 和 Ollama 本地模型
 - **可扩展规则** — 平台新增变更步骤类型时，只需更新 `mapping_rules.md` 文件
-- **MCP Server** — 可作为本地 MCP Server 接入 Claude Code 等 AI Agent，通过工具调用生成方案
-- **Agent Skill** — 配套 Skill 描述文件，Agent 可自动识别并调用
+- **Agent Skill** — 配套 Skill 描述文件，Agent 自动识别用户意图，通过本地 CLI 命令生成方案
+- **MCP Server** — 可选，可作为本地 MCP Server 接入 Claude Code 等 AI Agent
 
 ## 前置准备
 
@@ -149,38 +149,23 @@ python -m opsbutler -e input/checklist.xlsx -o output/plan.docx -c my_config.yam
 python -m opsbutler -e sample/上线checklist.xlsx -o output/test.docx --log-level DEBUG
 ```
 
-## 作为 MCP Server 使用
+## Agent Skill（推荐）
 
-OpsButler-LLM 可作为 MCP Server 接入 Claude Code 等 AI Agent，Agent 通过工具调用直接生成部署方案。
+`.claude/skills/opsbutler-deployment-plan/SKILL.md` 提供了 Agent Skill 描述，Claude Code 会自动识别并在用户提到上线清单、部署方案等关键词时触发。
 
-### 启动 MCP Server
+Agent 触发后会自动获取用户本地的 Excel 文件路径和输出路径，然后通过 Bash 执行 `python -m opsbutler` 命令完成生成。
 
-```bash
-python -m opsbutler.mcp_server
-```
+## 作为 MCP Server 使用（可选）
 
-Server 以 stdio 传输模式运行，暴露 `generate_deployment_plan` 工具。
+OpsButler-LLM 也可作为 MCP Server 接入 Claude Code 等 AI Agent，Agent 通过工具调用直接生成部署方案。
 
-### 工具参数
-
-| 参数 | 类型 | 必填 | 说明 |
-|---|---|---|---|
-| `excel_path` | string | 是 | Excel 上线清单文件路径 |
-| `output_path` | string | 是 | 输出 Word 文件路径 |
-
-### 在 Claude Code 中配置
-
-项目根目录已包含 `.mcp.json` 配置文件。在 Claude Code 中进入项目目录即可自动加载。
-
-或手动添加：
+项目根目录已包含 `.mcp.json` 配置文件，在 Claude Code 中进入项目目录即可自动加载。或手动添加：
 
 ```bash
 claude mcp add opsbutler -- python3 -m opsbutler.mcp_server
 ```
 
-### Agent Skill
-
-`.claude/skills/opsbutler-deployment-plan/SKILL.md` 提供了 Agent Skill 描述，Claude Code 会自动识别并在用户提到上线清单、部署方案等关键词时触发。
+MCP Server 以 stdio 传输模式运行，暴露 `generate_deployment_plan` 工具，参数为 `excel_path`（Excel 路径）和 `output_path`（输出路径）。
 
 ## 项目结构
 
@@ -189,6 +174,8 @@ OpsButler-LLM/
 ├── config.yaml                # 配置文件
 ├── mapping_rules.md           # Excel→平台步骤映射规则（人工维护）
 ├── requirements.txt           # Python 依赖
+├── SKILL/                     # Agent Skill 描述（独立分发）
+│   └── SKILL.md               # Skill 定义文件
 ├── prompts/                   # LLM Prompt 模板
 │   ├── system.txt             # 系统提示词
 │   ├── step_mapping.txt       # 步骤映射 Prompt
