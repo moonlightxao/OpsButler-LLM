@@ -35,6 +35,13 @@ class StepMapping(BaseModel):
     notes: Optional[str] = None
 
 
+class SheetSummary(BaseModel):
+    """Per-sheet change summary (LLM Call 2 per-sheet output)."""
+    sheet_name: str
+    changed_apps: str
+    changes_summary: str
+
+
 class StepMappingResult(BaseModel):
     step_mappings: list[StepMapping]
     task_table: list["TaskEntry"]

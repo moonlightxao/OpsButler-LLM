@@ -48,7 +48,7 @@ python -m opsbutler -e <excel_path> -o <output_path>
 
 ## 注意事项
 
-- 流程包含 3 次 LLM 调用，耗时 1-3 分钟
+- 流程按 Sheet 拆分调用 LLM（每个 Sheet 2 次调用 + 1 次综合汇总 + 1 次风险分析），耗时视 Sheet 数量而定，通常 1-3 分钟
 - LLM 调用失败时会自动重试（指数退避）
 - Excel 列名自动检测，支持多种中文名称变体
 - 生成的方案需人工审核确认后再用于生产环境

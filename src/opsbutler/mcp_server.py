@@ -11,7 +11,6 @@ from mcp.server.fastmcp import Context, FastMCP
 from opsbutler.config import load_config
 from opsbutler.excel_parser import load_excel
 from opsbutler.llm_client import create_llm_client
-from opsbutler.models import ImplementationPlan
 from opsbutler.plan_generator import PlanGenerator
 from opsbutler.word_generator import WordGenerator
 
@@ -41,8 +40,8 @@ async def generate_deployment_plan(
 ) -> dict[str, Any]:
     """从 Excel 上线清单生成部署实施方案（Word 文档）。
 
-    完整流水线：解析 Excel → 步骤映射（LLM）→ 汇总生成（LLM）→ 风险分析（LLM）→ 生成 Word 文件。
-    流程包含 3 次 LLM 调用，可能需要 1-3 分钟。
+    完整流水线：解析 Excel → 按 Sheet 拆分步骤映射（LLM）→ 按 Sheet 拆分汇总（LLM）→ 综合汇总（LLM）→ 风险分析（LLM）→ 生成 Word 文件。
+    流程包含多轮 LLM 调用（每个 Sheet 2 次 + 1 次综合 + 1 次风险分析），可能需要 1-3 分钟。
 
     Args:
         excel_path: Excel (.xlsx) 上线清单文件的路径。
@@ -65,57 +64,18 @@ async def generate_deployment_plan(
     # Step 0: Parse Excel
     ctx.info("正在解析 Excel 文件...")
     excel_payload = await asyncio.to_thread(load_excel, str(excel), config)
-    ctx.report_progress(1, 5, "Excel 解析完成")
+    ctx.report_progress(1, 3, "Excel 解析完成")
 
-    # Step 1: Step mapping (LLM call 1)
-    ctx.info("步骤 1/4: 生成步骤映射...")
+    # Steps 1-4: Run full pipeline via PlanGenerator
+    ctx.info("正在生成实施方案（按 Sheet 拆分 LLM 调用）...")
     generator = PlanGenerator(llm_client, config)
-    mapping_rules = generator._load_mapping_rules()
-    excel_json = excel_payload.model_dump_json(indent=2, exclude={"parsed_at"})
+    plan = await asyncio.to_thread(generator.generate, excel_payload)
+    ctx.report_progress(2, 3, "方案生成完成")
 
-    mapping_result = await asyncio.to_thread(
-        generator._do_step_mapping, excel_json, mapping_rules
-    )
-    ctx.report_progress(2, 5, "步骤映射完成")
-
-    # Step 2: Group data (no LLM)
-    ctx.info("步骤 2/4: 分组数据...")
-    step_details = await asyncio.to_thread(
-        generator._group_data, excel_payload, mapping_result
-    )
-    ctx.report_progress(3, 5, "数据分组完成")
-
-    # Step 3: Summary generation (LLM call 2)
-    ctx.info("步骤 3/4: 生成汇总...")
-    summary = await asyncio.to_thread(
-        generator._do_summary_generation, excel_json, mapping_result
-    )
-    ctx.report_progress(4, 5, "汇总生成完成")
-
-    # Step 4: Risk analysis (LLM call 3)
-    ctx.info("步骤 4/4: 生成风险分析...")
-    steps_summary = generator._build_steps_summary(step_details)
-    verification, rollback, risk = await asyncio.to_thread(
-        generator._do_risk_analysis, steps_summary
-    )
-    ctx.report_progress(5, 5, "风险分析完成")
-
-    # Merge into ImplementationPlan
-    plan = ImplementationPlan(
-        summary=summary,
-        task_count=len(mapping_result.task_table),
-        module_count=len(set(t.task_name for t in mapping_result.task_table)),
-        high_risk_count=0,
-        task_table=mapping_result.task_table,
-        step_details=step_details,
-        verification_plan=verification,
-        rollback_plan=rollback,
-        risk_analysis=risk,
-    )
-
-    # Generate Word document
+    # Step 5: Generate Word document
     ctx.info("正在生成 Word 文档...")
     await asyncio.to_thread(WordGenerator().generate, plan, str(output))
+    ctx.report_progress(3, 3, "Word 文档生成完成")
 
     return {
         "output_file": str(output),

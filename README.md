@@ -185,8 +185,9 @@ OpsButler-LLM/
 │   └── SKILL.md               # Skill 定义文件
 ├── prompts/                   # LLM Prompt 模板
 │   ├── system.txt             # 系统提示词
-│   ├── step_mapping.txt       # 步骤映射 Prompt
-│   ├── summary_generation.txt # 摘要生成 Prompt
+│   ├── step_mapping_sheet.txt # 按 Sheet 步骤映射 Prompt
+│   ├── summary_sheet.txt      # 按 Sheet 变更摘要 Prompt
+│   ├── summary_synthesis.txt  # 综合汇总 Prompt
 │   └── risk_analysis.txt      # 风险分析 Prompt
 ├── src/opsbutler/
 │   ├── main.py                # CLI 入口与管道编排
@@ -194,7 +195,7 @@ OpsButler-LLM/
 │   ├── models.py              # Pydantic 数据模型
 │   ├── excel_parser.py        # 动态 Excel 解析
 │   ├── llm_client.py          # LLM 客户端（requests）
-│   ├── plan_generator.py      # LLM 调用编排（3次调用）
+│   ├── plan_generator.py      # LLM 调用编排（按 Sheet 拆分）
 │   ├── word_generator.py      # Word 文档构建
 │   └── mcp_server.py          # MCP Server（Agent 工具接口）
 ├── sample/                    # 示例文件
@@ -212,16 +213,16 @@ OpsButler-LLM/
 Excel 上线清单
     │
     ▼
-动态解析（自动检测 Sheet/列名）
+动态解析（自动检测 Sheet/列名，跳过 skip_sheets 配置的 Sheet）
     │
     ▼
-LLM 调用 1: 步骤映射（Excel JSON + mapping_rules.md → 步骤映射结果）
+LLM 调用（按 Sheet 拆分）: 每个 Sheet 独立步骤映射 + 变更摘要
     │
     ▼
-LLM 调用 2: 摘要生成（变更应用/原因/影响分析）
+LLM 调用: 综合汇总所有 Sheet 摘要 → 最终变更概述
     │
     ▼
-LLM 调用 3: 风险分析（验证计划/回退措施/风险规避）
+LLM 调用: 风险分析（验证计划/回退措施/风险规避）
     │
     ▼
 程序化构建 Word 实施方案文档

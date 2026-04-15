@@ -1,0 +1,21 @@
+请根据以下单个Sheet的变更数据，生成该Sheet的变更摘要。
+
+## Sheet名称
+{sheet_name}
+
+## 变更数据
+{sheet_data}
+
+## 步骤映射结果
+{step_mappings}
+
+## 输出要求
+请输出严格的JSON，格式如下：
+{{
+  "changed_apps": "列出该Sheet涉及的应用名称和APPID",
+  "changes_summary": "描述该Sheet中具体做了哪些变更，包括操作类型和涉及的关键配置/资源"
+}}
+
+注意：
+- changed_apps 应简洁明了，列出所有涉及的应用
+- changes_summary 应基于实际变更内容，按操作类型分类描述

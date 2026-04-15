@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-OpsButler-LLM generates deployment implementation plans (Word documents) from Excel go-live checklists. It's a Chinese-language tool for IT operations teams. The pipeline reads an Excel file, makes 3 LLM calls to analyze/map/generate content, and produces a structured Word document.
+OpsButler-LLM generates deployment implementation plans (Word documents) from Excel go-live checklists. It's a Chinese-language tool for IT operations teams. The pipeline reads an Excel file, makes per-sheet LLM calls (2N+2 calls for N sheets) to analyze/map/generate content, and produces a structured Word document.
 
 ## Commands
 
@@ -26,14 +26,14 @@ No test suite, linter, or CI/CD is configured.
 
 ## Architecture
 
-Linear pipeline: **Excel → LLM (3 calls) → Word**
+Linear pipeline: **Excel → LLM (per-sheet, 2N+2 calls) → Word**
 
 ```
 main.py (CLI entry point)
   → config.py          Loads config.yaml with ${ENV_VAR} interpolation
   → excel_parser.py    Dynamic Excel parsing (auto-detects columns by candidate name lists)
   → llm_client.py      Factory: OpenAI-compatible or Ollama client, with retry + exponential backoff
-  → plan_generator.py  Orchestrates 4 pipeline steps (3 LLM calls + 1 grouping step)
+  → plan_generator.py  Orchestrates per-sheet LLM calls (2N+2 calls for N sheets) + grouping
   → word_generator.py  Builds Word doc via python-docx
 ```
 
@@ -41,12 +41,14 @@ Source code is under `src/opsbutler/`. The package is installed as `opsbutler`.
 
 ## Pipeline Steps (in plan_generator.py)
 
-1. **Step Mapping** (LLM call 1): Maps Excel rows to platform change steps using `mapping_rules.md` + prompt templates. Returns `StepMappingResult`.
-2. **Data Grouping** (no LLM): Groups mapped rows by step → operation type. Returns `list[StepDetail]`.
-3. **Summary Generation** (LLM call 2): Produces changed apps, reason/purpose, impact analysis.
-4. **Risk Analysis** (LLM call 3): Produces verification plan, rollback plan, risk analysis.
+Per-sheet architecture — each sheet is processed independently:
 
-All data models are Pydantic v2 classes in `models.py` (13 classes total).
+1. **Step Mapping** (LLM, per sheet): Maps one sheet's rows to platform change steps using relevant section of `mapping_rules.md`. Returns `StepMappingResult` per sheet, then merged.
+2. **Data Grouping** (no LLM): Groups mapped rows by step → operation type. Returns `list[StepDetail]`.
+3. **Summary Generation** (LLM, per sheet + synthesis): Each sheet gets a change summary (`SheetSummary`), then one synthesis call produces the final `SummarySection`.
+4. **Risk Analysis** (LLM, single call): Produces verification plan, rollback plan, risk analysis from compact step summary text.
+
+All data models are Pydantic v2 classes in `models.py` (14 classes total).
 
 ## Key Design Points
 
