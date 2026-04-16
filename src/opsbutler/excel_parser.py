@@ -2,6 +2,7 @@ from openpyxl import load_workbook
 from datetime import datetime
 from opsbutler.models import SheetData, ExcelPayload, ExcelSummary, ScheduleTable
 from typing import Any
+import re
 
 
 def load_excel(file_path: str, config=None) -> ExcelPayload:
@@ -72,8 +73,8 @@ def load_schedule_sheet(file_path: str) -> ScheduleTable | None:
 def _parse_sheet(ws, action_candidates: list[str], app_candidates: list[str]) -> SheetData:
     """Parse a single worksheet into SheetData."""
     headers = [cell.value for cell in ws[1]]
-    # Clean headers: strip whitespace, convert None to empty string
-    headers = [str(h).strip() if h is not None else "" for h in headers]
+    # Clean headers: strip whitespace, convert None to empty string, remove parenthetical descriptions
+    headers = [re.sub(r'[（(].*?[）)]', '', str(h).strip()) if h is not None else "" for h in headers]
 
     rows = []
     for row_idx in range(2, ws.max_row + 1):

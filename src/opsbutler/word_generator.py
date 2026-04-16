@@ -137,13 +137,22 @@ class WordGenerator:
                 self._add_data_table(doc, group.rows)
 
     def _add_data_table(self, doc, rows: list[dict]):
-        """Add a data table from row dicts. Column headers come from dict keys."""
+        """Add a data table from row dicts. Column headers come from dict keys.
+        Columns where all rows have empty/None values are filtered out."""
         if not rows:
             return
 
         headers = list(rows[0].keys())
         # Filter out None values from headers
         headers = [h for h in headers if h]
+        # Filter out columns where all rows have empty/None values
+        headers = [h for h in headers if any(
+            row.get(h) is not None and str(row.get(h, "")).strip() != ""
+            for row in rows
+        )]
+
+        if not headers:
+            return
 
         table = doc.add_table(rows=1, cols=len(headers), style="Table Grid")
 

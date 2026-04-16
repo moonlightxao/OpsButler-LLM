@@ -242,7 +242,13 @@ class PlanGenerator:
         logger.info("Phase 1: Per-sheet step mapping...")
         all_mappings: list[StepMapping] = []
 
-        for sheet in excel_payload.sheets:
+        # Process "上线制品包" first so artifact steps appear first in the Word document
+        sorted_sheets = sorted(
+            excel_payload.sheets,
+            key=lambda s: 0 if s.sheet_name == "上线制品包" else 1,
+        )
+
+        for sheet in sorted_sheets:
             sheet_rules = self._extract_sheet_rules(mapping_rules, sheet.sheet_name)
             if not sheet_rules:
                 logger.info(f"  Skipping sheet '{sheet.sheet_name}': no matching rules")
