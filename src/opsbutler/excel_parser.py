@@ -1,6 +1,6 @@
 from openpyxl import load_workbook
 from datetime import datetime
-from opsbutler.models import SheetData, ExcelPayload, ExcelSummary
+from opsbutler.models import SheetData, ExcelPayload, ExcelSummary, ScheduleTable
 from typing import Any
 
 
@@ -42,6 +42,31 @@ def load_excel(file_path: str, config=None) -> ExcelPayload:
         sheets=sheets,
         summary=summary,
     )
+
+
+def load_schedule_sheet(file_path: str) -> ScheduleTable | None:
+    """Parse the '变更安排' schedule sheet separately.
+    Returns None if the sheet does not exist or is empty.
+    """
+    wb = load_workbook(file_path, data_only=True)
+    sheet_name = "变更安排"
+    if sheet_name not in wb.sheetnames:
+        return None
+
+    ws = wb[sheet_name]
+    if ws.max_row <= 1:
+        return None
+
+    headers = [str(cell.value).strip() if cell.value is not None else "" for cell in ws[1]]
+    rows = []
+    for row_idx in range(2, ws.max_row + 1):
+        row_data = {}
+        for col_idx, header in enumerate(headers, 1):
+            cell = ws.cell(row=row_idx, column=col_idx)
+            row_data[header] = _serialize_value(cell.value)
+        rows.append(row_data)
+
+    return ScheduleTable(headers=headers, rows=rows)
 
 
 def _parse_sheet(ws, action_candidates: list[str], app_candidates: list[str]) -> SheetData:

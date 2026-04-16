@@ -44,7 +44,6 @@ class SheetSummary(BaseModel):
 
 class StepMappingResult(BaseModel):
     step_mappings: list[StepMapping]
-    task_table: list["TaskEntry"]
 
 
 # Operation grouping within a step
@@ -76,6 +75,13 @@ class TaskEntry(BaseModel):
     reviewer: str = ""
 
 
+# Schedule table from "变更安排" sheet (parsed directly, no LLM)
+class ScheduleTable(BaseModel):
+    """Task schedule table parsed directly from the '变更安排' sheet."""
+    headers: list[str]
+    rows: list[dict[str, Any]]
+
+
 # Risk analysis (Sections 3/4/5)
 class VerificationPlan(BaseModel):
     verification_steps: list[str]
@@ -102,7 +108,8 @@ class ImplementationPlan(BaseModel):
     task_count: int
     module_count: int
     high_risk_count: int
-    task_table: list[TaskEntry]
+    task_table: list[TaskEntry] = []
+    schedule_table: Optional[ScheduleTable] = None
     step_details: list[StepDetail]
     verification_plan: VerificationPlan
     rollback_plan: RollbackPlan

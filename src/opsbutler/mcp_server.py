@@ -9,7 +9,7 @@ from typing import Any
 from mcp.server.fastmcp import Context, FastMCP
 
 from opsbutler.config import load_config
-from opsbutler.excel_parser import load_excel
+from opsbutler.excel_parser import load_excel, load_schedule_sheet
 from opsbutler.llm_client import create_llm_client
 from opsbutler.plan_generator import PlanGenerator
 from opsbutler.word_generator import WordGenerator
@@ -64,12 +64,13 @@ async def generate_deployment_plan(
     # Step 0: Parse Excel
     ctx.info("正在解析 Excel 文件...")
     excel_payload = await asyncio.to_thread(load_excel, str(excel), config)
+    schedule_table = await asyncio.to_thread(load_schedule_sheet, str(excel))
     ctx.report_progress(1, 3, "Excel 解析完成")
 
     # Steps 1-4: Run full pipeline via PlanGenerator
     ctx.info("正在生成实施方案（按 Sheet 拆分 LLM 调用）...")
     generator = PlanGenerator(llm_client, config)
-    plan = await asyncio.to_thread(generator.generate, excel_payload)
+    plan = await asyncio.to_thread(generator.generate, excel_payload, schedule_table)
     ctx.report_progress(2, 3, "方案生成完成")
 
     # Step 5: Generate Word document

@@ -67,7 +67,7 @@ class WordGenerator:
         doc.add_paragraph("")
 
         # Task summary table (实施总表)
-        self._add_task_table(doc, plan.task_table)
+        self._add_task_table(doc, plan)
 
         # Detailed steps
         doc.add_heading("2.1 详细实施步骤", level=3)
@@ -75,8 +75,32 @@ class WordGenerator:
         for idx, step in enumerate(plan.step_details, 1):
             self._add_step(doc, idx, step)
 
-    def _add_task_table(self, doc, task_table):
+    def _add_task_table(self, doc, plan: ImplementationPlan):
         """Add the implementation summary table."""
+        if plan.schedule_table:
+            self._add_schedule_table(doc, plan.schedule_table)
+        else:
+            self._add_legacy_task_table(doc, plan.task_table)
+
+    def _add_schedule_table(self, doc, schedule_table):
+        """Render task table from '变更安排' sheet data."""
+        headers = schedule_table.headers
+        rows = schedule_table.rows
+
+        table = doc.add_table(rows=1 + len(rows), cols=len(headers), style="Table Grid")
+
+        # Header row
+        for i, header in enumerate(headers):
+            table.rows[0].cells[i].text = str(header)
+
+        # Data rows
+        for row_idx, row_data in enumerate(rows, 1):
+            for col_idx, header in enumerate(headers):
+                value = row_data.get(header, "")
+                table.rows[row_idx].cells[col_idx].text = str(value) if value is not None else ""
+
+    def _add_legacy_task_table(self, doc, task_table):
+        """Legacy task table rendering (backward compat)."""
         headers = ["序号", "任务", "开始时间", "结束时间", "实施人", "复核人"]
         table = doc.add_table(rows=1, cols=len(headers), style="Table Grid")
 

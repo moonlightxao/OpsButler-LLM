@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 from opsbutler.config import load_config
-from opsbutler.excel_parser import load_excel
+from opsbutler.excel_parser import load_excel, load_schedule_sheet
 from opsbutler.llm_client import create_llm_client
 from opsbutler.plan_generator import PlanGenerator
 from opsbutler.word_generator import WordGenerator
@@ -63,6 +63,11 @@ def main():
     excel_payload = load_excel(str(excel_path), config)
     logger.info(f"Parsed {len(excel_payload.sheets)} sheets, {excel_payload.summary.total_rows} total rows")
 
+    # Parse "变更安排" schedule sheet separately
+    schedule_table = load_schedule_sheet(str(excel_path))
+    if schedule_table:
+        logger.info(f"Schedule table parsed: {len(schedule_table.rows)} rows")
+
     # Create LLM client
     llm_client = create_llm_client(config.llm)
     logger.info(f"LLM client created: provider={config.llm.provider}, model={config.llm.model}")
@@ -70,7 +75,7 @@ def main():
     # Generate plan
     logger.info("Generating implementation plan via LLM...")
     generator = PlanGenerator(llm_client, config)
-    plan = generator.generate(excel_payload)
+    plan = generator.generate(excel_payload, schedule_table=schedule_table)
     logger.info(f"Plan generated: {plan.task_count} tasks, {plan.module_count} modules")
 
     # Generate Word document

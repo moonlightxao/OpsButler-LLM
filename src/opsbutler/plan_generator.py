@@ -5,8 +5,8 @@ from opsbutler.config import Config
 from opsbutler.models import (
     ExcelPayload, SheetData, StepMappingResult, StepMapping,
     SummarySection, VerificationPlan, RollbackPlan, RiskAnalysis,
-    ImplementationPlan, TaskEntry, StepDetail, OperationGroup,
-    SheetSummary,
+    ImplementationPlan, StepDetail, OperationGroup,
+    SheetSummary, ScheduleTable,
 )
 from opsbutler.llm_client import LLMClient
 
@@ -227,7 +227,7 @@ class PlanGenerator:
     # Main pipeline
     # ------------------------------------------------------------------
 
-    def generate(self, excel_payload: ExcelPayload) -> ImplementationPlan:
+    def generate(self, excel_payload: ExcelPayload, schedule_table: ScheduleTable | None = None) -> ImplementationPlan:
         """
         Full generation pipeline (per-sheet architecture):
         1. Per-sheet step mapping (Call 1 x N)
@@ -241,7 +241,6 @@ class PlanGenerator:
         # === Phase 1: Per-sheet step mapping ===
         logger.info("Phase 1: Per-sheet step mapping...")
         all_mappings: list[StepMapping] = []
-        all_task_entries: list[TaskEntry] = []
 
         for sheet in excel_payload.sheets:
             sheet_rules = self._extract_sheet_rules(mapping_rules, sheet.sheet_name)
@@ -253,15 +252,9 @@ class PlanGenerator:
             sheet_json = self._serialize_sheet(sheet)
             result = self._do_step_mapping_for_sheet(sheet, sheet_json, sheet_rules)
             all_mappings.extend(result.step_mappings)
-            all_task_entries.extend(result.task_table)
-
-        # Re-sequence task_table
-        for i, entry in enumerate(all_task_entries, 1):
-            entry.sequence = i
 
         mapping_result = StepMappingResult(
             step_mappings=all_mappings,
-            task_table=all_task_entries,
         )
 
         # === Phase 2: Group data ===
@@ -291,12 +284,17 @@ class PlanGenerator:
         verification, rollback, risk = self._do_risk_analysis(steps_summary)
 
         # === Phase 5: Merge ===
+        task_count = len(schedule_table.rows) if schedule_table else len(step_details)
+        module_count = len(set(
+            row.get("APPID", "") for row in schedule_table.rows
+        )) if schedule_table else len(excel_payload.summary.unique_apps)
+
         plan = ImplementationPlan(
             summary=summary,
-            task_count=len(mapping_result.task_table),
-            module_count=len(set(t.task_name for t in mapping_result.task_table)),
+            task_count=task_count,
+            module_count=module_count,
             high_risk_count=0,
-            task_table=mapping_result.task_table,
+            schedule_table=schedule_table,
             step_details=step_details,
             verification_plan=verification,
             rollback_plan=rollback,
