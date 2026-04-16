@@ -116,6 +116,8 @@ def extract_json(text: str) -> dict:
     Handles cases where LLM wraps JSON in markdown code blocks
     or adds extra text around it.
     """
+    if not text:
+        raise ValueError("LLM returned empty or None response")
     # Try direct parse first
     text = text.strip()
     try:
