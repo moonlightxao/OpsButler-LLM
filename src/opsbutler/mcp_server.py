@@ -27,7 +27,7 @@ async def server_lifespan(server: FastMCP):
 
 mcp = FastMCP(
     name="OpsButler-LLM",
-    instructions="从 Excel 上线清单生成部署实施方案（Word 文档）。",
+    instructions="从 Excel 上线清单生成部署实施方案（Word 文档）。部分 Sheet 页的详细数据可能被配置为 zip 附件（内含 Excel 表格），与 Word 文档一同输出到同一目录。",
     lifespan=server_lifespan,
 )
 
@@ -43,12 +43,16 @@ async def generate_deployment_plan(
     完整流水线：解析 Excel → 按 Sheet 拆分步骤映射（LLM）→ 按 Sheet 拆分汇总（LLM）→ 综合汇总（LLM）→ 风险分析（LLM）→ 生成 Word 文件。
     流程包含多轮 LLM 调用（每个 Sheet 2 次 + 1 次综合 + 1 次风险分析），可能需要 1-3 分钟。
 
+    当 mapping_rules.md 中为某个 Sheet 配置了 `- 打包方式: zip` 时，该 Sheet 的详细表格数据不会写入 Word 文档，
+    而是生成一个独立的 zip 文件（内含 Excel 表格），保存在输出目录下，文件名为 `{Sheet页名称}.zip`。
+    主 Word 文档中该步骤仍保留标题和描述，并以提示文字指向附件。
+
     Args:
         excel_path: Excel (.xlsx) 上线清单文件的路径。
         output_path: 输出 Word (.docx) 文件的路径。
 
     Returns:
-        包含生成结果摘要的字典：文件路径、任务数、模块数、步骤数等。
+        包含生成结果摘要的字典：output_file（Word 路径）、zip_files（zip 附件路径列表，可选）、task_count、module_count、step_count 等。
     """
     config = ctx.request_context.lifespan_context["config"]
     llm_client = ctx.request_context.lifespan_context["llm_client"]
@@ -75,10 +79,10 @@ async def generate_deployment_plan(
 
     # Step 5: Generate Word document
     ctx.info("正在生成 Word 文档...")
-    await asyncio.to_thread(WordGenerator().generate, plan, str(output))
+    word_result = await asyncio.to_thread(WordGenerator().generate, plan, str(output))
     ctx.report_progress(3, 3, "Word 文档生成完成")
 
-    return {
+    result = {
         "output_file": str(output),
         "task_count": plan.task_count,
         "module_count": plan.module_count,
@@ -87,6 +91,10 @@ async def generate_deployment_plan(
         "rollback_steps": len(plan.rollback_plan.rollback_steps),
         "risk_count": len(plan.risk_analysis.risks),
     }
+    if "zip_files" in word_result:
+        result["zip_files"] = word_result["zip_files"]
+
+    return result
 
 
 if __name__ == "__main__":

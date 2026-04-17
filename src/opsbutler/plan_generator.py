@@ -62,6 +62,30 @@ class PlanGenerator:
                         return general_rules + "\n## " + section
         return ""
 
+    def _load_zip_sheets(self) -> set[str]:
+        """Parse mapping_rules.md and return set of sheet names marked with '- 打包方式: zip'."""
+        mapping_rules = self._load_mapping_rules()
+        if not mapping_rules:
+            return set()
+
+        sections = mapping_rules.split("\n## ")
+        zip_sheets: set[str] = set()
+
+        for section in sections[1:]:
+            current_sheet = None
+            is_zip = False
+            for line in section.split("\n"):
+                stripped = line.strip()
+                if stripped.startswith("- 来源Sheet:") or stripped.startswith("- 来源 Sheet:"):
+                    current_sheet = stripped.split(":", 1)[1].strip()
+                elif stripped.startswith("- 打包方式:"):
+                    mode = stripped.split(":", 1)[1].strip().lower()
+                    is_zip = (mode == "zip")
+            if current_sheet and is_zip:
+                zip_sheets.add(current_sheet)
+
+        return zip_sheets
+
     # ------------------------------------------------------------------
     # Per-sheet JSON helpers
     # ------------------------------------------------------------------
@@ -171,8 +195,10 @@ class PlanGenerator:
     # Data grouping (no LLM)
     # ------------------------------------------------------------------
 
-    def _group_data(self, excel_payload: ExcelPayload, mapping_result: StepMappingResult) -> list[StepDetail]:
+    def _group_data(self, excel_payload: ExcelPayload, mapping_result: StepMappingResult, zip_sheets: set[str] | None = None) -> list[StepDetail]:
         """Group Excel rows by step and operation type based on mapping result."""
+        if zip_sheets is None:
+            zip_sheets = set()
         sheet_rows = {}
         for sheet in excel_payload.sheets:
             sheet_rows[sheet.sheet_name] = sheet.rows
@@ -188,6 +214,8 @@ class PlanGenerator:
                 step_name=mapping.step_name,
                 step_description=description,
                 operation_groups=operation_groups,
+                source_sheet=mapping.source_sheet,
+                is_zip=(mapping.source_sheet in zip_sheets),
             ))
 
         return step_details
@@ -237,6 +265,7 @@ class PlanGenerator:
         5. Merge into ImplementationPlan
         """
         mapping_rules = self._load_mapping_rules()
+        zip_sheets = self._load_zip_sheets()
 
         # === Phase 1: Per-sheet step mapping ===
         logger.info("Phase 1: Per-sheet step mapping...")
@@ -265,7 +294,7 @@ class PlanGenerator:
 
         # === Phase 2: Group data ===
         logger.info("Phase 2: Grouping data by step and operation type...")
-        step_details = self._group_data(excel_payload, mapping_result)
+        step_details = self._group_data(excel_payload, mapping_result, zip_sheets)
 
         # === Phase 3: Per-sheet summary + synthesis ===
         logger.info("Phase 3: Per-sheet summary generation...")

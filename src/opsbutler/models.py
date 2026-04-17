@@ -56,6 +56,8 @@ class StepDetail(BaseModel):
     step_name: str
     step_description: str  # from mapping_rules.md
     operation_groups: list[OperationGroup]
+    source_sheet: str = ""  # source Excel sheet name, used for zip filename
+    is_zip: bool = False  # when True, tables go to a separate zipped Excel file
 
 
 # LLM Summary output (Section 1)

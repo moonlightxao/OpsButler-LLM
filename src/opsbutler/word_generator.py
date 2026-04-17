@@ -1,14 +1,18 @@
 from docx import Document
 from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from pathlib import Path
+import io
+import zipfile
+from openpyxl import Workbook
 from opsbutler.models import ImplementationPlan
 
 
 class WordGenerator:
     """Generate implementation plan Word document from ImplementationPlan data."""
 
-    def generate(self, plan: ImplementationPlan, output_path: str) -> str:
-        """Generate Word document and save to output_path. Returns output_path."""
+    def generate(self, plan: ImplementationPlan, output_path: str) -> dict:
+        """Generate Word document and optional zip attachments. Returns dict with file paths."""
         doc = Document()
 
         # Title
@@ -33,7 +37,15 @@ class WordGenerator:
         self._add_risk(doc, plan)
 
         doc.save(output_path)
-        return output_path
+
+        result = {"output_file": output_path}
+
+        # Create zip attachments for zipped steps
+        zip_files = self._create_zip_attachments(plan.step_details, output_path)
+        if zip_files:
+            result["zip_files"] = zip_files
+
+        return result
 
     def _add_section1(self, doc, plan: ImplementationPlan):
         doc.add_heading("1 原因和目的", level=1)
@@ -126,6 +138,13 @@ class WordGenerator:
         if step.step_description:
             doc.add_paragraph(step.step_description)
 
+        # If this step is zipped, show reference instead of inline tables
+        if step.is_zip:
+            p = doc.add_paragraph()
+            run = p.add_run(f"详细数据见附件压缩包「{step.source_sheet}.zip」。")
+            run.italic = True
+            return
+
         # Operation groups
         for group in step.operation_groups:
             # Operation type label
@@ -166,6 +185,69 @@ class WordGenerator:
             for i, header in enumerate(headers):
                 value = row_data.get(header, "")
                 row.cells[i].text = str(value) if value is not None else ""
+
+    def _create_zip_attachments(self, step_details, main_output_path: str) -> list[str]:
+        """Create zip files for zipped steps. Each zip contains an Excel file with the step's data."""
+        zip_steps = [s for s in step_details if s.is_zip]
+        if not zip_steps:
+            return []
+
+        output_dir = Path(main_output_path).parent
+        zip_files = []
+
+        for step in zip_steps:
+            # Collect all rows across operation groups
+            all_rows = []
+            for group in step.operation_groups:
+                all_rows.extend(group.rows)
+
+            if not all_rows:
+                continue
+
+            # Build Excel workbook
+            wb = Workbook()
+            ws = wb.active
+            ws.title = step.step_name[:31]  # Excel sheet name max 31 chars
+
+            # Filter headers same as _add_data_table
+            headers = list(all_rows[0].keys())
+            headers = [h for h in headers if h]
+            headers = [h for h in headers if any(
+                row.get(h) is not None and str(row.get(h, "")).strip() != ""
+                for row in all_rows
+            )]
+
+            if not headers:
+                continue
+
+            # Write header row
+            for col_idx, header in enumerate(headers, 1):
+                ws.cell(row=1, column=col_idx, value=str(header))
+
+            # Write data rows
+            for row_idx, row_data in enumerate(all_rows, 2):
+                for col_idx, header in enumerate(headers, 1):
+                    value = row_data.get(header, "")
+                    ws.cell(row=row_idx, column=col_idx, value=str(value) if value is not None else "")
+
+            # Write Excel to buffer
+            excel_buffer = io.BytesIO()
+            wb.save(excel_buffer)
+            excel_buffer.seek(0)
+
+            # Sanitize filename
+            safe_name = step.source_sheet.replace("/", "_").replace("\\", "_").replace(":", "_")
+            excel_filename = f"{safe_name}.xlsx"
+            zip_filename = f"{safe_name}.zip"
+            zip_path = output_dir / zip_filename
+
+            # Create zip containing the Excel file
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+                zf.writestr(excel_filename, excel_buffer.read())
+
+            zip_files.append(str(zip_path))
+
+        return zip_files
 
     def _add_verification(self, doc, plan: ImplementationPlan):
         doc.add_heading("3 实施后验证计划", level=1)

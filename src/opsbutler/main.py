@@ -83,10 +83,17 @@ def main():
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     word_gen = WordGenerator()
-    word_gen.generate(plan, str(output_path))
-    logger.info(f"Word document saved to: {output_path}")
+    result = word_gen.generate(plan, str(output_path))
+    logger.info(f"Word document saved to: {result['output_file']}")
+    if "zip_files" in result:
+        for zf in result["zip_files"]:
+            logger.info(f"Zip attachment saved to: {zf}")
 
     print(f"\nSuccessfully generated: {output_path}")
+    if "zip_files" in result:
+        print("Zip attachments:")
+        for zf in result["zip_files"]:
+            print(f"  - {zf}")
 
 
 if __name__ == "__main__":

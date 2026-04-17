@@ -46,6 +46,8 @@ python -m opsbutler -e <excel_path> -o <output_path>
 
 生成的 Word 文档包含 5 个章节：原因和目的、实施步骤和计划、实施后验证计划、应急回退措施、风险分析和规避措施。
 
+**Zip 附件**：如果 `mapping_rules.md` 中为某个 Sheet 配置了 `- 打包方式: zip`，该 Sheet 的详细表格数据不会直接写入 Word 文档，而是打包为独立的 zip 文件（内含 Excel 表格），保存在 Word 文档同一目录下，文件名为 `{Sheet页名称}.zip`。主 Word 文档中该步骤仍保留标题和描述，并以斜体文字提示用户查看附件压缩包。
+
 ## 注意事项
 
 - 流程按 Sheet 拆分调用 LLM（每个 Sheet 2 次调用 + 1 次综合汇总 + 1 次风险分析），耗时视 Sheet 数量而定，通常 1-3 分钟
