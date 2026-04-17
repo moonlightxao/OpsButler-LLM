@@ -147,6 +147,10 @@ class PlanGenerator:
         ]
 
         result = self.llm.chat_json(messages)
+        # Defensive: LLM may return dict instead of string for these fields
+        for key in ("changed_apps", "changes_summary"):
+            if key in result and isinstance(result[key], dict):
+                result[key] = str(result[key])
         return SheetSummary(sheet_name=sheet.sheet_name, **result)
 
     # ------------------------------------------------------------------
