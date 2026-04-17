@@ -190,9 +190,13 @@ class PlanGenerator:
         ]
 
         result = self.llm.chat_json(messages)
-        verification = VerificationPlan(**result["verification_plan"])
-        rollback = RollbackPlan(**result["rollback_plan"])
-        risk = RiskAnalysis(**result["risk_analysis"])
+        # Defensive: LLM may return list instead of dict for these fields
+        vp = result["verification_plan"]
+        rp = result["rollback_plan"]
+        ra = result["risk_analysis"]
+        verification = VerificationPlan(**vp) if isinstance(vp, dict) else VerificationPlan(verification_steps=vp)
+        rollback = RollbackPlan(**rp) if isinstance(rp, dict) else RollbackPlan(rollback_steps=rp)
+        risk = RiskAnalysis(**ra) if isinstance(ra, dict) else RiskAnalysis(risks=ra)
         return verification, rollback, risk
 
     # ------------------------------------------------------------------
