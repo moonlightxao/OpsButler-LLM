@@ -110,6 +110,49 @@ def create_llm_client(config: LLMConfig) -> LLMClient:
     return OpenAICompatibleClient(config)
 
 
+def _fix_json_newlines(text: str) -> str:
+    """Replace literal newlines inside JSON string values with escaped \\n.
+
+    LLMs sometimes return JSON where string values contain literal newlines
+    instead of escaped \\n, which is invalid JSON.
+    """
+    result = []
+    in_string = False
+    i = 0
+    while i < len(text):
+        char = text[i]
+        # Handle escape sequences inside strings — skip the next char
+        if char == '\\' and in_string:
+            result.append(char)
+            i += 1
+            if i < len(text):
+                result.append(text[i])
+            i += 1
+            continue
+        if char == '"':
+            in_string = not in_string
+        elif char == '\n' and in_string:
+            result.append('\\n')
+            i += 1
+            continue
+        result.append(char)
+        i += 1
+    return ''.join(result)
+
+
+def _try_parse_json(text: str) -> dict | None:
+    """Try to parse text as JSON, with newline repair fallback."""
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    try:
+        return json.loads(_fix_json_newlines(text))
+    except json.JSONDecodeError:
+        pass
+    return None
+
+
 def extract_json(text: str) -> dict:
     """Extract JSON object from LLM response text.
 
@@ -120,28 +163,26 @@ def extract_json(text: str) -> dict:
         raise ValueError("LLM returned empty or None response")
     # Try direct parse first
     text = text.strip()
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        pass
+
+    result = _try_parse_json(text)
+    if result is not None:
+        return result
 
     # Try to extract from markdown code block
     pattern = r'```(?:json)?\s*\n?(.*?)\n?```'
     match = re.search(pattern, text, re.DOTALL)
     if match:
-        try:
-            return json.loads(match.group(1).strip())
-        except json.JSONDecodeError:
-            pass
+        result = _try_parse_json(match.group(1).strip())
+        if result is not None:
+            return result
 
     # Try to find first { ... } block
     pattern = r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
     match = re.search(pattern, text, re.DOTALL)
     if match:
-        try:
-            return json.loads(match.group(0))
-        except json.JSONDecodeError:
-            pass
+        result = _try_parse_json(match.group(0))
+        if result is not None:
+            return result
 
     # Last resort: find balanced braces
     start = text.find('{')
@@ -153,9 +194,8 @@ def extract_json(text: str) -> dict:
             elif text[i] == '}':
                 depth -= 1
                 if depth == 0:
-                    try:
-                        return json.loads(text[start:i+1])
-                    except json.JSONDecodeError:
-                        continue
+                    result = _try_parse_json(text[start:i+1])
+                    if result is not None:
+                        return result
 
     raise ValueError(f"Could not extract JSON from response: {text[:200]}...")

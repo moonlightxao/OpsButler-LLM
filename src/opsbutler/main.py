@@ -79,7 +79,7 @@ def main():
     logger.info(f"Plan generated: {plan.task_count} tasks, {plan.module_count} modules")
 
     # Generate Word document
-    output_path = Path(args.output)
+    output_path = Path(args.output).resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     word_gen = WordGenerator()

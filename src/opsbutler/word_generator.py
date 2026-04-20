@@ -1,3 +1,4 @@
+import logging
 from docx import Document
 from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -6,6 +7,8 @@ import io
 import zipfile
 from openpyxl import Workbook
 from opsbutler.models import ImplementationPlan
+
+logger = logging.getLogger(__name__)
 
 
 class WordGenerator:
@@ -44,6 +47,13 @@ class WordGenerator:
         zip_files = self._create_zip_attachments(plan.step_details, output_path)
         if zip_files:
             result["zip_files"] = zip_files
+            logger.info(f"Generated {len(zip_files)} ZIP attachment(s)")
+        else:
+            zip_steps = [s for s in plan.step_details if s.is_zip]
+            if zip_steps:
+                logger.warning(f"Found {len(zip_steps)} zip step(s) but no ZIP files were generated")
+            else:
+                logger.info("No zip steps found in plan")
 
         return result
 
@@ -193,6 +203,7 @@ class WordGenerator:
             return []
 
         output_dir = Path(main_output_path).parent
+        logger.info(f"ZIP output directory: {output_dir}, found {len(zip_steps)} zip step(s)")
         zip_files = []
 
         for step in zip_steps:
@@ -202,6 +213,7 @@ class WordGenerator:
                 all_rows.extend(group.rows)
 
             if not all_rows:
+                logger.warning(f"ZIP step '{step.step_name}' has no rows, skipping")
                 continue
 
             # Build Excel workbook
@@ -218,6 +230,7 @@ class WordGenerator:
             )]
 
             if not headers:
+                logger.warning(f"ZIP step '{step.step_name}' has no valid headers, skipping")
                 continue
 
             # Write header row
@@ -245,6 +258,7 @@ class WordGenerator:
             with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
                 zf.writestr(excel_filename, excel_buffer.read())
 
+            logger.info(f"Created ZIP attachment: {zip_path} ({len(all_rows)} rows)")
             zip_files.append(str(zip_path))
 
         return zip_files

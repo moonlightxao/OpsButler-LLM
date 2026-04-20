@@ -62,7 +62,7 @@ async def generate_deployment_plan(
     if not excel.exists():
         raise ValueError(f"Excel 文件不存在: {excel_path}")
 
-    output = Path(output_path)
+    output = Path(output_path).resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
 
     # Step 0: Parse Excel
