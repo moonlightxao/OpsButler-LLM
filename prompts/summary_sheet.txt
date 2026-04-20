@@ -12,10 +12,10 @@
 ## 输出要求
 请输出严格的JSON，格式如下：
 {{
-  "changed_apps": "列出该Sheet涉及的应用名称和APPID",
+  "changed_apps": "从变更数据中"变更应用"列提取所有应用ID，以逗号分隔的纯字符串返回（不要返回数组或对象）",
   "changes_summary": "描述该Sheet中具体做了哪些变更，包括操作类型和涉及的关键配置/资源"
 }}
 
 注意：
-- changed_apps 应简洁明了，列出所有涉及的应用
+- changed_apps 必须是纯字符串，不要返回数组或对象，多个应用ID用逗号分隔
 - changes_summary 应基于实际变更内容，按操作类型分类描述

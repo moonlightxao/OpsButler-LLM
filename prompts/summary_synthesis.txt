@@ -7,13 +7,13 @@
 请输出严格的JSON，格式如下：
 {{
   "summary": {{
-    "changed_apps": "汇总所有变更涉及的应用，列出应用名称和APPID",
+    "changed_apps": "合并所有应用ID，以逗号分隔的纯字符串返回（不要返回数组或对象）",
     "reason_and_purpose": "基于全部变更内容总结本次变更的原因和目的",
     "impact_analysis": "综合分析本次变更的影响范围，包括影响的系统、用户、业务流程等"
   }}
 }}
 
 注意：
-- changed_apps 应合并所有Sheet涉及的应用，去除重复
+- changed_apps 必须是纯字符串，不要返回数组或对象，合并去重后用逗号分隔
 - reason_and_purpose 应从整体视角总结，不要逐个Sheet罗列
 - impact_analysis 应覆盖所有变更步骤的直接和间接影响
