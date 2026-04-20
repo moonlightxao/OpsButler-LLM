@@ -224,14 +224,6 @@ def extract_json(text: str) -> dict:
         if result is not None:
             return result
 
-    # Try to find first { ... } block
-    pattern = r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
-    match = re.search(pattern, text, re.DOTALL)
-    if match:
-        result = _try_parse_json(match.group(0))
-        if result is not None:
-            return result
-
     # Last resort: find balanced braces
     start = text.find('{')
     if start != -1:
