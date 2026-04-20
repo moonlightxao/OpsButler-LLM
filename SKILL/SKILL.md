@@ -33,6 +33,7 @@ python -m opsbutler -e <excel_path> -o <output_path>
 可选参数：
 - `-c / --config`：指定配置文件路径（默认 `config.yaml`）
 - `--log-level`：日志级别 DEBUG/INFO/WARNING/ERROR（默认 INFO）
+- `--debug`：开启 debug 模式，打印 LLM 提示词、token 用量、请求耗时
 
 ## 前置条件
 

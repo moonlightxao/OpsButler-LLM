@@ -43,6 +43,12 @@ def main():
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="Logging level (default: INFO)"
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        default=False,
+        help="Enable debug mode: print LLM prompts, token usage, and request duration"
+    )
 
     args = parser.parse_args()
     setup_logging(args.log_level)
@@ -57,6 +63,11 @@ def main():
     # Load config
     config = load_config(args.config)
     logger.info(f"Config loaded from {args.config}")
+
+    # CLI --debug overrides config
+    if args.debug:
+        config.llm.debug = True
+        logger.info("Debug mode enabled via --debug flag")
 
     # Parse Excel
     logger.info(f"Parsing Excel file: {excel_path}")

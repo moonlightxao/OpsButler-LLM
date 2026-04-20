@@ -1,5 +1,6 @@
 import json
 import re
+import time
 import logging
 import requests
 from opsbutler.config import LLMConfig
@@ -30,6 +31,7 @@ class OpenAICompatibleClient(LLMClient):
         self.temperature = config.temperature
         self.max_tokens = config.max_tokens
         self.retry_count = config.retry_count
+        self.debug = config.debug
 
     def chat(self, messages: list[dict]) -> str:
         url = f"{self.base_url}/chat/completions"
@@ -44,12 +46,33 @@ class OpenAICompatibleClient(LLMClient):
             "max_tokens": self.max_tokens,
         }
 
+        if self.debug:
+            logger.info("===== [DEBUG] LLM Request =====")
+            logger.info("  Model: %s", self.model)
+            for msg in messages:
+                role = msg.get("role", "unknown")
+                content = msg.get("content", "")
+                logger.info("  [%s]: %s", role, content[:5000])
+            logger.info("===== End Prompt =====")
+
         last_error = None
         for attempt in range(self.retry_count + 1):
             try:
+                start_time = time.time()
                 resp = requests.post(url, headers=headers, json=payload, timeout=120)
                 resp.raise_for_status()
                 data = resp.json()
+                duration = time.time() - start_time
+
+                if self.debug:
+                    usage = data.get("usage", {})
+                    logger.info("===== [DEBUG] LLM Response =====")
+                    logger.info("  Duration: %.2fs", duration)
+                    logger.info("  Prompt tokens: %s", usage.get("prompt_tokens", "N/A"))
+                    logger.info("  Completion tokens: %s", usage.get("completion_tokens", "N/A"))
+                    logger.info("  Total tokens: %s", usage.get("total_tokens", "N/A"))
+                    logger.info("===== End Response =====")
+
                 return data["choices"][0]["message"]["content"]
             except Exception as e:
                 last_error = e
@@ -70,6 +93,7 @@ class OllamaClient(LLMClient):
         self.temperature = config.temperature
         self.retry_count = config.retry_count
         self.think = config.think
+        self.debug = config.debug
 
     def chat(self, messages: list[dict]) -> str:
         url = f"{self.host}/api/chat"
@@ -83,12 +107,33 @@ class OllamaClient(LLMClient):
             "think": self.think,
         }
 
+        if self.debug:
+            logger.info("===== [DEBUG] LLM Request =====")
+            logger.info("  Model: %s", self.model)
+            for msg in messages:
+                role = msg.get("role", "unknown")
+                content = msg.get("content", "")
+                logger.info("  [%s]: %s", role, content[:5000])
+            logger.info("===== End Prompt =====")
+
         last_error = None
         for attempt in range(self.retry_count + 1):
             try:
+                start_time = time.time()
                 resp = requests.post(url, json=payload, timeout=300)
                 resp.raise_for_status()
                 data = resp.json()
+                duration = time.time() - start_time
+
+                if self.debug:
+                    prompt_tokens = data.get("prompt_eval_count", "N/A")
+                    completion_tokens = data.get("eval_count", "N/A")
+                    logger.info("===== [DEBUG] LLM Response =====")
+                    logger.info("  Duration: %.2fs", duration)
+                    logger.info("  Prompt tokens: %s", prompt_tokens)
+                    logger.info("  Completion tokens: %s", completion_tokens)
+                    logger.info("===== End Response =====")
+
                 content = data["message"]["content"]
                 if not content or content.strip() in ("", "..."):
                     logger.debug(f"Ollama returned empty content, full response keys: {list(data.keys())}, message keys: {list(data['message'].keys())}")

@@ -55,6 +55,7 @@ llm:
   temperature: 0.3
   max_tokens: 4096
   retry_count: 2
+  debug: false                    # 开启后打印 LLM 提示词、token 用量、请求耗时
 ```
 
 **使用 OpenAI 兼容 API：**
@@ -135,6 +136,7 @@ python -m opsbutler --excel <Excel文件路径> --output <输出Word路径>
 | `--output` | `-o` | 是 | 输出的 Word 实施方案文件路径 |
 | `--config` | `-c` | 否 | 配置文件路径，默认 `config.yaml` |
 | `--log-level` | — | 否 | 日志级别：DEBUG / INFO / WARNING / ERROR，默认 INFO |
+| `--debug` | — | 否 | 开启 debug 模式，打印 LLM 提示词、token 用量、请求耗时 |
 
 ### 示例
 
@@ -155,6 +157,14 @@ python -m opsbutler -e input/checklist.xlsx -o output/plan.docx -c my_config.yam
 ```bash
 python -m opsbutler -e sample/上线checklist.xlsx -o output/test.docx --log-level DEBUG
 ```
+
+**开启 debug 模式（打印 LLM 提示词、token 用量、请求耗时）：**
+
+```bash
+python -m opsbutler -e sample/上线checklist.xlsx -o output/test.docx --debug
+```
+
+也可以在 `config.yaml` 中设置 `llm.debug: true` 持久开启。
 
 ## Agent Skill（推荐）
 

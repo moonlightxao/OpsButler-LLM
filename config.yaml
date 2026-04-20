@@ -7,6 +7,7 @@ llm:
   max_tokens: 4096
   retry_count: 2
   think: false
+  debug: false
 
 excel:
   action_column_candidates:
