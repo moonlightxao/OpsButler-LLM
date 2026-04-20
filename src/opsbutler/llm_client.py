@@ -80,7 +80,6 @@ class OpenAICompatibleClient(LLMClient):
                 last_error = e
                 logger.warning(f"LLM request attempt {attempt + 1} failed: {e}")
                 if attempt < self.retry_count:
-                    import time
                     time.sleep(2 ** attempt)
 
         raise RuntimeError(f"LLM request failed after {self.retry_count + 1} attempts: {last_error}")
@@ -145,7 +144,6 @@ class OllamaClient(LLMClient):
                 last_error = e
                 logger.warning(f"Ollama request attempt {attempt + 1} failed: {e}")
                 if attempt < self.retry_count:
-                    import time
                     time.sleep(2 ** attempt)
 
         raise RuntimeError(f"Ollama request failed after {self.retry_count + 1} attempts: {last_error}")
