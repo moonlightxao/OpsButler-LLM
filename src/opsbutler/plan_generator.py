@@ -1,5 +1,6 @@
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from opsbutler.config import Config
 from opsbutler.models import (
@@ -96,6 +97,30 @@ class PlanGenerator:
             {"sheet_name": sheet.sheet_name, "rows": sheet.rows},
             ensure_ascii=False,
         )
+
+    def _batch_sheet_rows(self, sheet: SheetData) -> list[tuple[int, SheetData]]:
+        """Split a sheet's rows into batches by batch_size.
+
+        Returns list of (offset, SheetData) tuples where offset is the
+        starting row index in the original sheet.
+        """
+        batch_size = self.config.llm.batch_size
+        rows = sheet.rows
+        if len(rows) <= batch_size:
+            return [(0, sheet)]
+
+        batches = []
+        for i in range(0, len(rows), batch_size):
+            batch_rows = rows[i:i + batch_size]
+            batch_sheet = SheetData(
+                sheet_name=sheet.sheet_name,
+                headers=sheet.headers,
+                rows=batch_rows,
+                detected_action_column=sheet.detected_action_column,
+                detected_app_column=sheet.detected_app_column,
+            )
+            batches.append((i, batch_sheet))
+        return batches
 
     # ------------------------------------------------------------------
     # Phase 1: Per-sheet step mapping
@@ -291,10 +316,34 @@ class PlanGenerator:
                 logger.info(f"  Skipping sheet '{sheet.sheet_name}': no matching rules")
                 continue
 
-            logger.info(f"  Mapping sheet '{sheet.sheet_name}' ({len(sheet.rows)} rows)...")
-            sheet_json = self._serialize_sheet(sheet)
-            result = self._do_step_mapping_for_sheet(sheet, sheet_json, sheet_rules)
-            all_mappings.extend(result.step_mappings)
+            batches = self._batch_sheet_rows(sheet)
+            logger.info(f"  Mapping sheet '{sheet.sheet_name}' ({len(sheet.rows)} rows, {len(batches)} batch(es))...")
+
+            if len(batches) == 1:
+                # Single batch — no concurrency needed
+                _, batch_sheet = batches[0]
+                sheet_json = self._serialize_sheet(batch_sheet)
+                result = self._do_step_mapping_for_sheet(batch_sheet, sheet_json, sheet_rules)
+                all_mappings.extend(result.step_mappings)
+            else:
+                # Multiple batches — concurrent execution
+                max_workers = self.config.llm.max_workers
+
+                def _map_batch(offset: int, bs: SheetData) -> list[StepMapping]:
+                    sj = self._serialize_sheet(bs)
+                    r = self._do_step_mapping_for_sheet(bs, sj, sheet_rules)
+                    # Adjust row_indices to global offset
+                    for m in r.step_mappings:
+                        m.row_indices = [idx + offset for idx in m.row_indices]
+                    return r.step_mappings
+
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    futures = {
+                        executor.submit(_map_batch, offset, bs): offset
+                        for offset, bs in batches
+                    }
+                    for future in as_completed(futures):
+                        all_mappings.extend(future.result())
 
         mapping_result = StepMappingResult(
             step_mappings=all_mappings,
@@ -313,10 +362,44 @@ class PlanGenerator:
             if not sheet_mappings:
                 continue
 
-            logger.info(f"  Summarizing sheet '{sheet.sheet_name}'...")
-            sheet_json = self._serialize_sheet(sheet)
-            summary = self._do_summary_for_sheet(sheet, sheet_json, sheet_mappings)
-            sheet_summaries.append(summary)
+            batches = self._batch_sheet_rows(sheet)
+            logger.info(f"  Summarizing sheet '{sheet.sheet_name}' ({len(sheet.rows)} rows, {len(batches)} batch(es))...")
+
+            if len(batches) == 1:
+                _, batch_sheet = batches[0]
+                sheet_json = self._serialize_sheet(batch_sheet)
+                summary = self._do_summary_for_sheet(batch_sheet, sheet_json, sheet_mappings)
+                sheet_summaries.append(summary)
+            else:
+                max_workers = self.config.llm.max_workers
+                batch_summaries: list[SheetSummary] = []
+
+                def _summarize_batch(offset: int, bs: SheetData) -> SheetSummary:
+                    sj = self._serialize_sheet(bs)
+                    # Filter mappings to those with row indices in this batch range
+                    batch_end = offset + len(bs.rows)
+                    batch_mappings = [
+                        m for m in sheet_mappings
+                        if any(offset <= idx < batch_end for idx in m.row_indices)
+                    ]
+                    return self._do_summary_for_sheet(bs, sj, batch_mappings)
+
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    futures = {
+                        executor.submit(_summarize_batch, offset, bs): offset
+                        for offset, bs in batches
+                    }
+                    for future in as_completed(futures):
+                        batch_summaries.append(future.result())
+
+                # Merge batch summaries into one
+                merged_apps = "; ".join(s.changed_apps for s in batch_summaries)
+                merged_desc = "\n".join(s.changes_summary for s in batch_summaries)
+                sheet_summaries.append(SheetSummary(
+                    sheet_name=sheet.sheet_name,
+                    changed_apps=merged_apps,
+                    changes_summary=merged_desc,
+                ))
 
         logger.info("  Synthesizing final summary...")
         summary = self._do_summary_synthesis(sheet_summaries)

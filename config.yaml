@@ -8,6 +8,8 @@ llm:
   retry_count: 2
   think: false
   debug: false
+  batch_size: 200
+  max_workers: 10
 
 excel:
   action_column_candidates:

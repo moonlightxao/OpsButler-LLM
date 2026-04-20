@@ -56,6 +56,8 @@ llm:
   max_tokens: 4096
   retry_count: 2
   debug: false                    # 开启后打印 LLM 提示词、token 用量、请求耗时
+  batch_size: 200                 # 单次 LLM 请求的最大数据行数，超出自动分批并发调用
+  max_workers: 10                 # 分批并发调用 LLM 的最大线程数
 ```
 
 **使用 OpenAI 兼容 API：**
