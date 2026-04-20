@@ -148,14 +148,24 @@ class WordGenerator:
         if step.step_description:
             doc.add_paragraph(step.step_description)
 
-        # If this step is zipped, show reference instead of inline tables
-        if step.is_zip:
-            p = doc.add_paragraph()
-            run = p.add_run(f"详细数据见附件压缩包「{step.source_sheet}.zip」。")
-            run.italic = True
+        # Large sheet mode: show operation descriptions + ZIP reference
+        if step.is_large_sheet:
+            if step.operation_descriptions:
+                for op_name, op_desc in step.operation_descriptions.items():
+                    p = doc.add_paragraph()
+                    run = p.add_run(f"【{op_name}】")
+                    run.bold = True
+                    if op_desc:
+                        doc.add_paragraph(op_desc)
+            self._add_zip_reference(doc, f"{step.source_sheet}.zip")
             return
 
-        # Operation groups
+        # Normal zip mode: show ZIP reference only
+        if step.is_zip:
+            self._add_zip_reference(doc, f"{step.source_sheet}.zip")
+            return
+
+        # Normal mode: inline tables
         for group in step.operation_groups:
             # Operation type label
             doc.add_paragraph(f"【{group.operation_type}】")
@@ -164,6 +174,14 @@ class WordGenerator:
             # Data table
             if group.rows:
                 self._add_data_table(doc, group.rows)
+
+    def _add_zip_reference(self, doc, zip_filename: str):
+        """Add a prominent reference to a ZIP attachment in the Word document."""
+        p = doc.add_paragraph()
+        run = p.add_run(f"【附件】{zip_filename}")
+        run.bold = True
+        run.font.size = Pt(11)
+        doc.add_paragraph(f"本步骤的详细数据见附件压缩包「{zip_filename}」，其中包含完整的 Excel 数据表格。")
 
     def _add_data_table(self, doc, rows: list[dict]):
         """Add a data table from row dicts. Column headers come from dict keys.

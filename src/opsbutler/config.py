@@ -16,8 +16,9 @@ class LLMConfig:
     retry_count: int = 2
     think: bool = False
     debug: bool = False
-    batch_size: int = 200
-    max_workers: int = 10
+    batch_size: int = 50
+    max_workers: int = 4
+    timeout: int = 300
 
 
 @dataclass
@@ -25,6 +26,7 @@ class ExcelConfig:
     action_column_candidates: list[str] = field(default_factory=lambda: ["操作类型", "操作", "变更事项", "变更类型"])
     app_column_candidates: list[str] = field(default_factory=lambda: ["APPID", "应用", "应用名称"])
     skip_sheets: list[str] = field(default_factory=lambda: ["变更安排"])
+    large_sheet_threshold: int = 200
 
 
 @dataclass
@@ -86,13 +88,15 @@ def _dict_to_config(data: dict) -> Config:
             retry_count=int(llm_data.get("retry_count", 2)),
             think=bool(llm_data.get("think", False)),
             debug=bool(llm_data.get("debug", False)),
-            batch_size=int(llm_data.get("batch_size", 200)),
-            max_workers=int(llm_data.get("max_workers", 10)),
+            batch_size=int(llm_data.get("batch_size", 50)),
+            max_workers=int(llm_data.get("max_workers", 4)),
+            timeout=int(llm_data.get("timeout", 300)),
         ),
         excel=ExcelConfig(
             action_column_candidates=excel_data.get("action_column_candidates", ["操作类型", "操作", "变更事项", "变更类型"]),
             app_column_candidates=excel_data.get("app_column_candidates", ["APPID", "应用", "应用名称"]),
             skip_sheets=excel_data.get("skip_sheets", ["变更安排"]),
+            large_sheet_threshold=int(excel_data.get("large_sheet_threshold", 200)),
         ),
         mapping=MappingConfig(
             rules_file=mapping_data.get("rules_file", "./mapping_rules.md"),

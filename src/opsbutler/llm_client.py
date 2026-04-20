@@ -32,6 +32,7 @@ class OpenAICompatibleClient(LLMClient):
         self.max_tokens = config.max_tokens
         self.retry_count = config.retry_count
         self.debug = config.debug
+        self.timeout = config.timeout
 
     def chat(self, messages: list[dict]) -> str:
         url = f"{self.base_url}/chat/completions"
@@ -59,7 +60,7 @@ class OpenAICompatibleClient(LLMClient):
         for attempt in range(self.retry_count + 1):
             try:
                 start_time = time.time()
-                resp = requests.post(url, headers=headers, json=payload, timeout=120)
+                resp = requests.post(url, headers=headers, json=payload, timeout=self.timeout)
                 resp.raise_for_status()
                 data = resp.json()
                 duration = time.time() - start_time
@@ -95,6 +96,7 @@ class OllamaClient(LLMClient):
         self.retry_count = config.retry_count
         self.think = config.think
         self.debug = config.debug
+        self.timeout = config.timeout
 
     def chat(self, messages: list[dict]) -> str:
         url = f"{self.host}/api/chat"
@@ -121,7 +123,7 @@ class OllamaClient(LLMClient):
         for attempt in range(self.retry_count + 1):
             try:
                 start_time = time.time()
-                resp = requests.post(url, json=payload, timeout=300)
+                resp = requests.post(url, json=payload, timeout=self.timeout)
                 resp.raise_for_status()
                 data = resp.json()
                 duration = time.time() - start_time

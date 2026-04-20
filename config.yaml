@@ -8,8 +8,9 @@ llm:
   retry_count: 2
   think: false
   debug: false
-  batch_size: 200
-  max_workers: 10
+  batch_size: 50
+  max_workers: 4
+  timeout: 300
 
 excel:
   action_column_candidates:
@@ -23,6 +24,7 @@ excel:
     - "应用名称"
   skip_sheets:
     - "变更安排"
+  large_sheet_threshold: 200
 
 mapping:
   rules_file: "./mapping_rules.md"

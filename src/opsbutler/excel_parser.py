@@ -32,6 +32,7 @@ def load_excel(file_path: str, config=None) -> ExcelPayload:
     wb = load_workbook(file_path, data_only=True)
     sheets = []
     debug = config and config.llm.debug
+    threshold = config.excel.large_sheet_threshold if config else 200
 
     for sheet_name in wb.sheetnames:
         if sheet_name in skip_sheets:
@@ -44,7 +45,7 @@ def load_excel(file_path: str, config=None) -> ExcelPayload:
                 logger.info("[DEBUG] 跳过 Sheet: %s (仅有列头或为空)", sheet_name)
             continue
         start = time.time()
-        sheet_data = _parse_sheet(ws, action_candidates, app_candidates)
+        sheet_data = _parse_sheet(ws, action_candidates, app_candidates, threshold)
         duration = time.time() - start
         if debug:
             logger.info("[DEBUG] Sheet 解析完成: %s, %d 行数据, %.3fs",
@@ -84,7 +85,7 @@ def load_schedule_sheet(file_path: str) -> ScheduleTable | None:
     return ScheduleTable(headers=headers, rows=rows)
 
 
-def _parse_sheet(ws, action_candidates: list[str], app_candidates: list[str]) -> SheetData:
+def _parse_sheet(ws, action_candidates: list[str], app_candidates: list[str], large_sheet_threshold: int = 200) -> SheetData:
     """Parse a single worksheet into SheetData."""
     headers = [cell.value for cell in ws[1]]
     # Clean headers: strip whitespace, convert None to empty string, remove parenthetical descriptions
@@ -101,12 +102,25 @@ def _parse_sheet(ws, action_candidates: list[str], app_candidates: list[str]) ->
     detected_action = _detect_column(headers, action_candidates)
     detected_app = _detect_column(headers, app_candidates)
 
+    # Detect large sheet and extract deduplicated operations
+    is_large = len(rows) > large_sheet_threshold and detected_action is not None
+    unique_operations = []
+    if is_large and detected_action:
+        seen = set()
+        for row in rows:
+            op = str(row.get(detected_action, "")).strip()
+            if op and op not in seen:
+                seen.add(op)
+                unique_operations.append(op)
+
     return SheetData(
         sheet_name=ws.title,
         headers=headers,
         rows=rows,
         detected_action_column=detected_action,
         detected_app_column=detected_app,
+        is_large=is_large,
+        unique_operations=unique_operations,
     )
 
 

@@ -17,6 +17,8 @@ class SheetData(BaseModel):
     rows: list[dict[str, Any]]
     detected_action_column: Optional[str] = None
     detected_app_column: Optional[str] = None
+    is_large: bool = False
+    unique_operations: list[str] = []
 
 
 class ExcelPayload(BaseModel):
@@ -46,6 +48,12 @@ class StepMappingResult(BaseModel):
     step_mappings: list[StepMapping]
 
 
+class LargeSheetMapping(BaseModel):
+    """大Sheet去重操作LLM分析结果"""
+    step_mappings: list[StepMapping]
+    operation_descriptions: dict[str, str] = {}
+
+
 # Operation grouping within a step
 class OperationGroup(BaseModel):
     operation_type: str
@@ -58,6 +66,8 @@ class StepDetail(BaseModel):
     operation_groups: list[OperationGroup]
     source_sheet: str = ""  # source Excel sheet name, used for zip filename
     is_zip: bool = False  # when True, tables go to a separate zipped Excel file
+    is_large_sheet: bool = False  # when True, no inline tables, only chapter content + ZIP
+    operation_descriptions: dict[str, str] = {}  # operation_name -> description for large sheets
 
 
 # LLM Summary output (Section 1)

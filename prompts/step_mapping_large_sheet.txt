@@ -1,0 +1,38 @@
+请根据以下映射规则和该Sheet中出现的所有去重操作类型，分析这些操作涉及哪些平台变更步骤。
+
+## 通用规则
+- 不匹配任何步骤定义的操作归入"其他"步骤
+
+## 映射规则
+{mapping_rules}
+
+## Sheet名称
+{sheet_name}
+
+## 去重操作类型列表
+{unique_operations}
+
+## 输出要求
+请输出严格的JSON，格式如下：
+{{
+  "step_mappings": [
+    {{
+      "step_name": "平台步骤名",
+      "source_sheet": "{sheet_name}",
+      "row_indices": [],
+      "description": "该步骤的操作描述（来自映射规则或推断）",
+      "notes": "补充说明（可选）"
+    }}
+  ],
+  "operation_descriptions": {{
+    "操作类型1": "该操作的简要说明（用于Word文档中显示）",
+    "操作类型2": "该操作的简要说明"
+  }}
+}}
+
+注意：
+- step_mappings 中的 row_indices 留空数组（本Sheet为大表模式，不逐行映射）
+- 仅需识别该Sheet涉及的步骤名称
+- operation_descriptions 中为每个操作类型提供一句简要说明，用于生成Word文档中的章节内容
+- 不匹配任何步骤定义的操作归入"其他"步骤
+- 一个Sheet可以映射到多个平台步骤

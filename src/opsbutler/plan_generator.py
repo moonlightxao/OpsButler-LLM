@@ -7,7 +7,7 @@ from opsbutler.models import (
     ExcelPayload, SheetData, StepMappingResult, StepMapping,
     SummarySection, VerificationPlan, RollbackPlan, RiskAnalysis,
     ImplementationPlan, StepDetail, OperationGroup,
-    SheetSummary, ScheduleTable,
+    SheetSummary, ScheduleTable, LargeSheetMapping,
 )
 from opsbutler.llm_client import LLMClient
 
@@ -145,6 +145,25 @@ class PlanGenerator:
         result = self.llm.chat_json(messages)
         return StepMappingResult(**result)
 
+    def _do_step_mapping_for_large_sheet(
+        self, sheet: SheetData, sheet_rules: str
+    ) -> LargeSheetMapping:
+        """LLM Call for large sheets: analyze deduplicated operations to determine platform steps."""
+        template = self._load_prompt("step_mapping_large_sheet.txt")
+        user_message = template.format(
+            mapping_rules=sheet_rules,
+            sheet_name=sheet.sheet_name,
+            unique_operations=json.dumps(sheet.unique_operations, ensure_ascii=False),
+        )
+
+        messages = [
+            {"role": "system", "content": self.system_prompt},
+            {"role": "user", "content": user_message},
+        ]
+
+        result = self.llm.chat_json(messages)
+        return LargeSheetMapping(**result)
+
     # ------------------------------------------------------------------
     # Phase 3a: Per-sheet summary
     # ------------------------------------------------------------------
@@ -228,10 +247,12 @@ class PlanGenerator:
     # Data grouping (no LLM)
     # ------------------------------------------------------------------
 
-    def _group_data(self, excel_payload: ExcelPayload, mapping_result: StepMappingResult, zip_sheets: set[str] | None = None) -> list[StepDetail]:
+    def _group_data(self, excel_payload: ExcelPayload, mapping_result: StepMappingResult, zip_sheets: set[str] | None = None, large_sheet_ops: dict | None = None) -> list[StepDetail]:
         """Group Excel rows by step and operation type based on mapping result."""
         if zip_sheets is None:
             zip_sheets = set()
+        if large_sheet_ops is None:
+            large_sheet_ops = {}
         sheet_rows = {}
         for sheet in excel_payload.sheets:
             sheet_rows[sheet.sheet_name] = sheet.rows
@@ -239,17 +260,30 @@ class PlanGenerator:
         step_details = []
         for mapping in mapping_result.step_mappings:
             rows = sheet_rows.get(mapping.source_sheet, [])
-            step_rows = [rows[i] for i in mapping.row_indices if i < len(rows)]
-            operation_groups = self._group_by_operation(step_rows, mapping.source_sheet, excel_payload)
-            description = mapping.description or ""
 
-            step_details.append(StepDetail(
-                step_name=mapping.step_name,
-                step_description=description,
-                operation_groups=operation_groups,
-                source_sheet=mapping.source_sheet,
-                is_zip=(mapping.source_sheet in zip_sheets),
-            ))
+            if mapping.source_sheet in large_sheet_ops:
+                # Large sheet: use all rows for ZIP content
+                operation_groups = self._group_by_operation(rows, mapping.source_sheet, excel_payload)
+                step_details.append(StepDetail(
+                    step_name=mapping.step_name,
+                    step_description=mapping.description or "",
+                    operation_groups=operation_groups,
+                    source_sheet=mapping.source_sheet,
+                    is_zip=True,
+                    is_large_sheet=True,
+                    operation_descriptions=large_sheet_ops.get(mapping.source_sheet, {}),
+                ))
+            else:
+                # Normal sheet: use mapped rows only
+                step_rows = [rows[i] for i in mapping.row_indices if i < len(rows)]
+                operation_groups = self._group_by_operation(step_rows, mapping.source_sheet, excel_payload)
+                step_details.append(StepDetail(
+                    step_name=mapping.step_name,
+                    step_description=mapping.description or "",
+                    operation_groups=operation_groups,
+                    source_sheet=mapping.source_sheet,
+                    is_zip=(mapping.source_sheet in zip_sheets),
+                ))
 
         return step_details
 
@@ -303,6 +337,7 @@ class PlanGenerator:
         # === Phase 1: Per-sheet step mapping ===
         logger.info("Phase 1: Per-sheet step mapping...")
         all_mappings: list[StepMapping] = []
+        large_sheet_ops: dict[str, dict[str, str]] = {}  # sheet_name -> {op -> desc}
 
         # Process "上线制品包" first so artifact steps appear first in the Word document
         sorted_sheets = sorted(
@@ -314,6 +349,14 @@ class PlanGenerator:
             sheet_rules = self._extract_sheet_rules(mapping_rules, sheet.sheet_name)
             if not sheet_rules:
                 logger.info(f"  Skipping sheet '{sheet.sheet_name}': no matching rules")
+                continue
+
+            if sheet.is_large:
+                # Large sheet mode: dedup operations -> LLM analysis
+                logger.info(f"  Mapping large sheet '{sheet.sheet_name}' ({len(sheet.rows)} rows, {len(sheet.unique_operations)} unique ops)...")
+                large_result = self._do_step_mapping_for_large_sheet(sheet, sheet_rules)
+                all_mappings.extend(large_result.step_mappings)
+                large_sheet_ops[sheet.sheet_name] = large_result.operation_descriptions
                 continue
 
             batches = self._batch_sheet_rows(sheet)
@@ -351,7 +394,7 @@ class PlanGenerator:
 
         # === Phase 2: Group data ===
         logger.info("Phase 2: Grouping data by step and operation type...")
-        step_details = self._group_data(excel_payload, mapping_result, zip_sheets)
+        step_details = self._group_data(excel_payload, mapping_result, zip_sheets, large_sheet_ops)
 
         # === Phase 3: Per-sheet summary + synthesis ===
         logger.info("Phase 3: Per-sheet summary generation...")
@@ -360,6 +403,16 @@ class PlanGenerator:
         for sheet in excel_payload.sheets:
             sheet_mappings = [m for m in all_mappings if m.source_sheet == sheet.sheet_name]
             if not sheet_mappings:
+                continue
+
+            if sheet.is_large:
+                # Large sheet: build summary directly from dedup operations (no LLM call)
+                ops_text = ", ".join(sheet.unique_operations)
+                sheet_summaries.append(SheetSummary(
+                    sheet_name=sheet.sheet_name,
+                    changed_apps=f"共{len(sheet.unique_operations)}种操作类型",
+                    changes_summary=f"操作类型包括: {ops_text}",
+                ))
                 continue
 
             batches = self._batch_sheet_rows(sheet)
