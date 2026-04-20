@@ -66,11 +66,13 @@ class OpenAICompatibleClient(LLMClient):
 
                 if self.debug:
                     usage = data.get("usage", {})
+                    response_content = data["choices"][0]["message"]["content"]
                     logger.info("===== [DEBUG] LLM Response =====")
                     logger.info("  Duration: %.2fs", duration)
                     logger.info("  Prompt tokens: %s", usage.get("prompt_tokens", "N/A"))
                     logger.info("  Completion tokens: %s", usage.get("completion_tokens", "N/A"))
                     logger.info("  Total tokens: %s", usage.get("total_tokens", "N/A"))
+                    logger.info("  Response: %s", response_content[:5000])
                     logger.info("===== End Response =====")
 
                 return data["choices"][0]["message"]["content"]
@@ -132,6 +134,7 @@ class OllamaClient(LLMClient):
                     logger.info("  Duration: %.2fs", duration)
                     logger.info("  Prompt tokens: %s", prompt_tokens)
                     logger.info("  Completion tokens: %s", completion_tokens)
+                    logger.info("  Response: %s", content[:5000])
                     logger.info("===== End Response =====")
 
                 content = data["message"]["content"]

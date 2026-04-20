@@ -1,8 +1,12 @@
+import time
+import logging
 from openpyxl import load_workbook
 from datetime import datetime
 from opsbutler.models import SheetData, ExcelPayload, ExcelSummary, ScheduleTable
 from typing import Any
 import re
+
+logger = logging.getLogger(__name__)
 
 
 def load_excel(file_path: str, config=None) -> ExcelPayload:
@@ -27,14 +31,24 @@ def load_excel(file_path: str, config=None) -> ExcelPayload:
 
     wb = load_workbook(file_path, data_only=True)
     sheets = []
+    debug = config and config.llm.debug
 
     for sheet_name in wb.sheetnames:
         if sheet_name in skip_sheets:
+            if debug:
+                logger.info("[DEBUG] 跳过 Sheet: %s (在 skip_sheets 中)", sheet_name)
             continue
         ws = wb[sheet_name]
         if ws.max_row <= 1:  # skip empty sheets (header only)
+            if debug:
+                logger.info("[DEBUG] 跳过 Sheet: %s (仅有列头或为空)", sheet_name)
             continue
+        start = time.time()
         sheet_data = _parse_sheet(ws, action_candidates, app_candidates)
+        duration = time.time() - start
+        if debug:
+            logger.info("[DEBUG] Sheet 解析完成: %s, %d 行数据, %.3fs",
+                        sheet_name, len(sheet_data.rows), duration)
         sheets.append(sheet_data)
 
     summary = _build_summary(sheets)
