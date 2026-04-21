@@ -224,17 +224,18 @@ def extract_json(text: str) -> dict | list:
         if result is not None:
             return result
 
-    # Try to find a JSON array (top-level [...])
-    start = text.find('[')
-    if start != -1:
+    # Try to find a JSON array (top-level [...]) — only if [ appears before {
+    start_arr = text.find('[')
+    start_obj = text.find('{')
+    if start_arr != -1 and (start_obj == -1 or start_arr < start_obj):
         depth = 0
-        for i in range(start, len(text)):
+        for i in range(start_arr, len(text)):
             if text[i] == '[':
                 depth += 1
             elif text[i] == ']':
                 depth -= 1
                 if depth == 0:
-                    result = _try_parse_json(text[start:i+1])
+                    result = _try_parse_json(text[start_arr:i+1])
                     if result is not None:
                         return result
                     break
