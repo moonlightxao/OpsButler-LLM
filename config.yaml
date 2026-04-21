@@ -24,6 +24,7 @@ excel:
     - "应用名称"
   skip_sheets:
     - "变更安排"
+    - "变更前准备"
   large_sheet_threshold: 200
 
 mapping:

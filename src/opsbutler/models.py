@@ -94,6 +94,13 @@ class ScheduleTable(BaseModel):
     rows: list[dict[str, Any]]
 
 
+# Prep table from "变更前准备" sheet (parsed directly, no LLM)
+class PrepTable(BaseModel):
+    """Preparation checklist parsed directly from the '变更前准备' sheet."""
+    headers: list[str]
+    rows: list[dict[str, Any]]
+
+
 # Risk analysis (Sections 3/4/5)
 class VerificationPlan(BaseModel):
     verification_steps: list[str]
@@ -122,6 +129,7 @@ class ImplementationPlan(BaseModel):
     high_risk_count: int
     task_table: list[TaskEntry] = []
     schedule_table: Optional[ScheduleTable] = None
+    prep_table: Optional[PrepTable] = None
     step_details: list[StepDetail]
     verification_plan: VerificationPlan
     rollback_plan: RollbackPlan

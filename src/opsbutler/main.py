@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 from opsbutler.config import load_config
-from opsbutler.excel_parser import load_excel, load_schedule_sheet
+from opsbutler.excel_parser import load_excel, load_schedule_sheet, load_prep_sheet
 from opsbutler.llm_client import create_llm_client
 from opsbutler.plan_generator import PlanGenerator
 from opsbutler.word_generator import WordGenerator
@@ -79,6 +79,11 @@ def main():
     if schedule_table:
         logger.info(f"Schedule table parsed: {len(schedule_table.rows)} rows")
 
+    # Parse "变更前准备" prep sheet separately
+    prep_table = load_prep_sheet(str(excel_path))
+    if prep_table:
+        logger.info(f"Prep table parsed: {len(prep_table.rows)} rows")
+
     # Create LLM client
     llm_client = create_llm_client(config.llm)
     logger.info(f"LLM client created: provider={config.llm.provider}, model={config.llm.model}")
@@ -86,7 +91,7 @@ def main():
     # Generate plan
     logger.info("Generating implementation plan via LLM...")
     generator = PlanGenerator(llm_client, config)
-    plan = generator.generate(excel_payload, schedule_table=schedule_table)
+    plan = generator.generate(excel_payload, schedule_table=schedule_table, prep_table=prep_table)
     logger.info(f"Plan generated: {plan.task_count} tasks, {plan.module_count} modules")
 
     # Generate Word document

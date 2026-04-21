@@ -2,7 +2,7 @@ import time
 import logging
 from openpyxl import load_workbook
 from datetime import datetime
-from opsbutler.models import SheetData, ExcelPayload, ExcelSummary, ScheduleTable
+from opsbutler.models import SheetData, ExcelPayload, ExcelSummary, ScheduleTable, PrepTable
 from typing import Any
 import re
 
@@ -85,6 +85,31 @@ def load_schedule_sheet(file_path: str) -> ScheduleTable | None:
     return ScheduleTable(headers=headers, rows=rows)
 
 
+def load_prep_sheet(file_path: str) -> PrepTable | None:
+    """Parse the '变更前准备' sheet separately.
+    Returns None if the sheet does not exist or is empty.
+    """
+    wb = load_workbook(file_path, data_only=True)
+    sheet_name = "变更前准备"
+    if sheet_name not in wb.sheetnames:
+        return None
+
+    ws = wb[sheet_name]
+    if ws.max_row <= 1:
+        return None
+
+    headers = [str(cell.value).strip() if cell.value is not None else "" for cell in ws[1]]
+    rows = []
+    for row_idx in range(2, ws.max_row + 1):
+        row_data = {}
+        for col_idx, header in enumerate(headers, 1):
+            cell = ws.cell(row=row_idx, column=col_idx)
+            row_data[header] = _serialize_value(cell.value)
+        rows.append(row_data)
+
+    return PrepTable(headers=headers, rows=rows)
+
+
 def _parse_sheet(ws, action_candidates: list[str], app_candidates: list[str], large_sheet_threshold: int = 200) -> SheetData:
     """Parse a single worksheet into SheetData."""
     headers = [cell.value for cell in ws[1]]
@@ -146,7 +171,7 @@ def _serialize_value(val) -> Any:
     if val is None:
         return None
     if isinstance(val, datetime):
-        return val.isoformat()
+        return val.strftime("%Y-%m-%d %H:%M:%S")
     if isinstance(val, (int, float, bool)):
         return val
     return str(val)

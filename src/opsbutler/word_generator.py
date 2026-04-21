@@ -85,14 +85,23 @@ class WordGenerator:
     def _add_section2(self, doc, plan: ImplementationPlan):
         doc.add_heading("2 实施步骤和计划", level=1)
 
-        # Add empty paragraph for spacing
-        doc.add_paragraph("")
+        # 2.1 变更前准备
+        doc.add_heading("2.1 变更前准备", level=2)
+        if plan.prep_table:
+            self._add_schedule_table(doc, plan.prep_table)
+        else:
+            doc.add_paragraph("无变更前准备事项。")
 
-        # Task summary table (实施总表)
+        # 2.2 分批计划
+        doc.add_heading("2.2 分批计划", level=2)
+        doc.add_paragraph("暂不涉及。")
+
+        # 2.3 实施步骤
+        doc.add_heading("2.3 实施步骤", level=2)
         self._add_task_table(doc, plan)
 
-        # Detailed steps
-        doc.add_heading("2.1 详细实施步骤", level=3)
+        # 2.4 详细实施步骤
+        doc.add_heading("2.4 详细实施步骤", level=2)
 
         for idx, step in enumerate(plan.step_details, 1):
             self._add_step(doc, idx, step)
@@ -142,7 +151,7 @@ class WordGenerator:
 
     def _add_step(self, doc, step_index: int, step):
         """Add a single step section with heading, description, and operation tables."""
-        doc.add_heading(f"2.1.{step_index} {step.step_name}", level=4)
+        doc.add_heading(f"2.4.{step_index} {step.step_name}", level=3)
 
         # Step description
         if step.step_description:

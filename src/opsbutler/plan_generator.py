@@ -7,7 +7,7 @@ from opsbutler.models import (
     ExcelPayload, SheetData, StepMappingResult, StepMapping,
     SummarySection, VerificationPlan, RollbackPlan, RiskAnalysis,
     ImplementationPlan, StepDetail, OperationGroup,
-    SheetSummary, ScheduleTable, LargeSheetMapping,
+    SheetSummary, ScheduleTable, LargeSheetMapping, PrepTable,
 )
 from opsbutler.llm_client import LLMClient
 
@@ -322,7 +322,7 @@ class PlanGenerator:
     # Main pipeline
     # ------------------------------------------------------------------
 
-    def generate(self, excel_payload: ExcelPayload, schedule_table: ScheduleTable | None = None) -> ImplementationPlan:
+    def generate(self, excel_payload: ExcelPayload, schedule_table: ScheduleTable | None = None, prep_table: PrepTable | None = None) -> ImplementationPlan:
         """
         Full generation pipeline (per-sheet architecture):
         1. Per-sheet step mapping (Call 1 x N)
@@ -474,6 +474,7 @@ class PlanGenerator:
             module_count=module_count,
             high_risk_count=0,
             schedule_table=schedule_table,
+            prep_table=prep_table,
             step_details=step_details,
             verification_plan=verification,
             rollback_plan=rollback,
