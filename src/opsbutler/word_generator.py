@@ -2,6 +2,8 @@ import logging
 from docx import Document
 from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
 from pathlib import Path
 import io
 import zipfile
@@ -17,9 +19,13 @@ class WordGenerator:
     def generate(self, plan: ImplementationPlan, output_path: str) -> dict:
         """Generate Word document and optional zip attachments. Returns dict with file paths."""
         doc = Document()
+        self._set_default_font(doc)
 
         # Title
         doc.add_heading("上线checklist - 实施方案", level=0)
+
+        # TOC page
+        self._add_toc(doc)
 
         # Section 1
         self._add_section1(doc, plan)
@@ -56,6 +62,55 @@ class WordGenerator:
                 logger.info("No zip steps found in plan")
 
         return result
+
+    def _set_default_font(self, doc: Document):
+        """Set global font to 黑体 for all relevant styles."""
+        font_name = '黑体'
+        for style_name in ('Normal', 'Heading 1', 'Heading 2', 'Heading 3', 'Title'):
+            style = doc.styles[style_name]
+            font = style.font
+            font.name = font_name
+            rpr = style.element.get_or_add_rPr()
+            rFonts = rpr.get_or_add_rFonts()
+            rFonts.set(qn('w:eastAsia'), font_name)
+
+    def _add_toc(self, doc: Document):
+        """Add a Table of Contents page. Word auto-updates on open via w:dirty attribute."""
+        doc.add_heading("目录", level=1)
+
+        paragraph = doc.add_paragraph()
+
+        # Begin field char
+        run1 = paragraph.add_run()
+        fldChar_begin = OxmlElement('w:fldChar')
+        fldChar_begin.set(qn('w:fldCharType'), 'begin')
+        fldChar_begin.set(qn('w:dirty'), 'true')
+        run1._r.append(fldChar_begin)
+
+        # Field instruction
+        run2 = paragraph.add_run()
+        instrText = OxmlElement('w:instrText')
+        instrText.set(qn('xml:space'), 'preserve')
+        instrText.text = ' TOC \\o "1-3" \\h \\z \\u '
+        run2._r.append(instrText)
+
+        # Separate field char
+        run3 = paragraph.add_run()
+        fldChar_sep = OxmlElement('w:fldChar')
+        fldChar_sep.set(qn('w:fldCharType'), 'separate')
+        run3._r.append(fldChar_sep)
+
+        # Placeholder text (replaced when Word updates the field)
+        run4 = paragraph.add_run("（目录将在 Word 中自动生成）")
+
+        # End field char
+        run5 = paragraph.add_run()
+        fldChar_end = OxmlElement('w:fldChar')
+        fldChar_end.set(qn('w:fldCharType'), 'end')
+        run5._r.append(fldChar_end)
+
+        # Page break after TOC
+        doc.add_page_break()
 
     def _add_section1(self, doc, plan: ImplementationPlan):
         doc.add_heading("1 原因和目的", level=1)
@@ -194,13 +249,18 @@ class WordGenerator:
 
     def _add_data_table(self, doc, rows: list[dict]):
         """Add a data table from row dicts. Column headers come from dict keys.
-        Columns where all rows have empty/None values are filtered out."""
+        Columns where all rows have empty/None values are filtered out.
+        If any header has a * suffix, only *-marked columns are included."""
         if not rows:
             return
 
         headers = list(rows[0].keys())
         # Filter out None values from headers
         headers = [h for h in headers if h]
+        # If any headers have * suffix, only keep those columns
+        starred = [h for h in headers if h.endswith("*")]
+        if starred:
+            headers = starred
         # Filter out columns where all rows have empty/None values
         headers = [h for h in headers if any(
             row.get(h) is not None and str(row.get(h, "")).strip() != ""
@@ -212,9 +272,9 @@ class WordGenerator:
 
         table = doc.add_table(rows=1, cols=len(headers), style="Table Grid")
 
-        # Header row
+        # Header row — strip * suffix for display
         for i, header in enumerate(headers):
-            table.rows[0].cells[i].text = str(header)
+            table.rows[0].cells[i].text = header.rstrip("*")
 
         # Data rows
         for row_data in rows:

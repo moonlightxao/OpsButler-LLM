@@ -15,7 +15,7 @@ class LLMClient:
         """Send messages and return text response."""
         raise NotImplementedError
 
-    def chat_json(self, messages: list[dict]) -> dict:
+    def chat_json(self, messages: list[dict]) -> dict | list:
         """Send messages and parse JSON from response."""
         response_text = self.chat(messages)
         return extract_json(response_text)
@@ -188,7 +188,7 @@ def _fix_json_newlines(text: str) -> str:
     return ''.join(result)
 
 
-def _try_parse_json(text: str) -> dict | None:
+def _try_parse_json(text: str) -> dict | list | None:
     """Try to parse text as JSON, with newline repair fallback."""
     try:
         return json.loads(text)
@@ -201,8 +201,8 @@ def _try_parse_json(text: str) -> dict | None:
     return None
 
 
-def extract_json(text: str) -> dict:
-    """Extract JSON object from LLM response text.
+def extract_json(text: str) -> dict | list:
+    """Extract JSON object or array from LLM response text.
 
     Handles cases where LLM wraps JSON in markdown code blocks
     or adds extra text around it.
@@ -224,7 +224,22 @@ def extract_json(text: str) -> dict:
         if result is not None:
             return result
 
-    # Last resort: find balanced braces
+    # Try to find a JSON array (top-level [...])
+    start = text.find('[')
+    if start != -1:
+        depth = 0
+        for i in range(start, len(text)):
+            if text[i] == '[':
+                depth += 1
+            elif text[i] == ']':
+                depth -= 1
+                if depth == 0:
+                    result = _try_parse_json(text[start:i+1])
+                    if result is not None:
+                        return result
+                    break
+
+    # Last resort: find balanced braces for a JSON object
     start = text.find('{')
     if start != -1:
         depth = 0

@@ -143,6 +143,9 @@ class PlanGenerator:
         ]
 
         result = self.llm.chat_json(messages)
+        # Normalize: LLM may return a bare list [{...}, ...] instead of {"step_mappings": [...]}
+        if isinstance(result, list):
+            result = {"step_mappings": result}
         return StepMappingResult(**result)
 
     def _do_step_mapping_for_large_sheet(
@@ -162,6 +165,9 @@ class PlanGenerator:
         ]
 
         result = self.llm.chat_json(messages)
+        # Normalize: LLM may return a bare list instead of {"step_mappings": [...]}
+        if isinstance(result, list):
+            result = {"step_mappings": result}
         return LargeSheetMapping(**result)
 
     # ------------------------------------------------------------------
