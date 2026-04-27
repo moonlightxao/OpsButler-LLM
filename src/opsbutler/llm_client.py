@@ -15,10 +15,32 @@ class LLMClient:
         """Send messages and return text response."""
         raise NotImplementedError
 
-    def chat_json(self, messages: list[dict]) -> dict | list:
-        """Send messages and parse JSON from response."""
-        response_text = self.chat(messages)
-        return extract_json(response_text)
+    def chat_json(self, messages: list[dict], json_retry: int | None = None) -> dict | list:
+        """Send messages and parse JSON from response.
+
+        Retries on JSON extraction failure with exponential backoff.
+        Uses self.json_retry_count if json_retry not specified.
+        """
+        if json_retry is None:
+            json_retry = getattr(self, 'json_retry_count', 2)
+
+        last_error = None
+        for attempt in range(json_retry + 1):
+            try:
+                response_text = self.chat(messages)
+                return extract_json(response_text)
+            except ValueError as e:
+                last_error = e
+                logger.warning(
+                    "JSON extraction attempt %d/%d failed: %s",
+                    attempt + 1, json_retry + 1, e
+                )
+                if attempt < json_retry:
+                    time.sleep(2 ** attempt)
+
+        raise ValueError(
+            f"JSON extraction failed after {json_retry + 1} attempts: {last_error}"
+        )
 
 
 class OpenAICompatibleClient(LLMClient):
@@ -33,6 +55,7 @@ class OpenAICompatibleClient(LLMClient):
         self.retry_count = config.retry_count
         self.debug = config.debug
         self.timeout = config.timeout
+        self.json_retry_count = config.json_retry_count
 
     def chat(self, messages: list[dict]) -> str:
         url = f"{self.base_url}/chat/completions"
@@ -97,6 +120,7 @@ class OllamaClient(LLMClient):
         self.think = config.think
         self.debug = config.debug
         self.timeout = config.timeout
+        self.json_retry_count = config.json_retry_count
 
     def chat(self, messages: list[dict]) -> str:
         url = f"{self.host}/api/chat"
@@ -128,6 +152,8 @@ class OllamaClient(LLMClient):
                 data = resp.json()
                 duration = time.time() - start_time
 
+                content = data["message"]["content"]
+
                 if self.debug:
                     prompt_tokens = data.get("prompt_eval_count", "N/A")
                     completion_tokens = data.get("eval_count", "N/A")
@@ -138,9 +164,12 @@ class OllamaClient(LLMClient):
                     logger.info("  Response: %s", content[:5000])
                     logger.info("===== End Response =====")
 
-                content = data["message"]["content"]
                 if not content or content.strip() in ("", "..."):
-                    logger.debug(f"Ollama returned empty content, full response keys: {list(data.keys())}, message keys: {list(data['message'].keys())}")
+                    raise ValueError(
+                        f"Ollama returned empty or placeholder content, "
+                        f"response keys: {list(data.keys())}, "
+                        f"message keys: {list(data['message'].keys())}"
+                    )
                 return content
             except Exception as e:
                 last_error = e
@@ -201,57 +230,91 @@ def _try_parse_json(text: str) -> dict | list | None:
     return None
 
 
+def _find_all_json_candidates(text: str) -> list[tuple[int, object]]:
+    """Find all valid, non-empty JSON objects/arrays in text.
+
+    Returns list of (end_position, parsed_json) sorted by position.
+    Skips empty {} and [].
+    """
+    candidates = []
+    i = 0
+    while i < len(text):
+        if text[i] not in ('{', '['):
+            i += 1
+            continue
+
+        open_char = text[i]
+        close_char = '}' if open_char == '{' else ']'
+        depth = 0
+        in_string = False
+        j = i
+        while j < len(text):
+            c = text[j]
+            if c == '\\' and in_string:
+                j += 2
+                continue
+            if c == '"':
+                in_string = not in_string
+            elif not in_string:
+                if c == open_char:
+                    depth += 1
+                elif c == close_char:
+                    depth -= 1
+                    if depth == 0:
+                        candidate = text[i:j+1]
+                        result = _try_parse_json(candidate)
+                        if result is not None:
+                            is_empty = (isinstance(result, dict) and len(result) == 0) or \
+                                       (isinstance(result, list) and len(result) == 0)
+                            if not is_empty:
+                                candidates.append((j, result))
+                        i = j
+                        break
+            j += 1
+        i += 1
+    return candidates
+
+
 def extract_json(text: str) -> dict | list:
     """Extract JSON object or array from LLM response text.
 
-    Handles cases where LLM wraps JSON in markdown code blocks
-    or adds extra text around it.
+    Handles cases where LLM wraps JSON in markdown code blocks,
+    adds extra text (including thinking/chain-of-thought), or
+    returns empty content.
+
+    Strategy: find all valid JSON candidates in the response and
+    take the LAST non-empty one - since thinking/CoT comes before
+    the actual answer in most reasoning models.
     """
     if not text:
         raise ValueError("LLM returned empty or None response")
-    # Try direct parse first
+
     text = text.strip()
 
+    # Strategy 1: direct parse
     result = _try_parse_json(text)
     if result is not None:
-        return result
-
-    # Try to extract from markdown code block
-    pattern = r'```(?:json)?\s*\n?(.*?)\n?```'
-    match = re.search(pattern, text, re.DOTALL)
-    if match:
-        result = _try_parse_json(match.group(1).strip())
-        if result is not None:
+        is_empty = (isinstance(result, dict) and len(result) == 0) or \
+                   (isinstance(result, list) and len(result) == 0)
+        if not is_empty:
             return result
 
-    # Try to find a JSON array (top-level [...]) — only if [ appears before {
-    start_arr = text.find('[')
-    start_obj = text.find('{')
-    if start_arr != -1 and (start_obj == -1 or start_arr < start_obj):
-        depth = 0
-        for i in range(start_arr, len(text)):
-            if text[i] == '[':
-                depth += 1
-            elif text[i] == ']':
-                depth -= 1
-                if depth == 0:
-                    result = _try_parse_json(text[start_arr:i+1])
-                    if result is not None:
-                        return result
-                    break
+    # Strategy 2: extract from markdown code blocks (take last valid)
+    last_md_result = None
+    for match in re.finditer(r'```(?:json)?\s*\n?(.*?)\n?```', text, re.DOTALL):
+        result = _try_parse_json(match.group(1).strip())
+        if result is not None:
+            is_empty = (isinstance(result, dict) and len(result) == 0) or \
+                       (isinstance(result, list) and len(result) == 0)
+            if not is_empty:
+                last_md_result = result
+    if last_md_result is not None:
+        return last_md_result
 
-    # Last resort: find balanced braces for a JSON object
-    start = text.find('{')
-    if start != -1:
-        depth = 0
-        for i in range(start, len(text)):
-            if text[i] == '{':
-                depth += 1
-            elif text[i] == '}':
-                depth -= 1
-                if depth == 0:
-                    result = _try_parse_json(text[start:i+1])
-                    if result is not None:
-                        return result
+    # Strategy 3: find ALL JSON candidates, take the last non-empty one
+    candidates = _find_all_json_candidates(text)
+    if candidates:
+        _, result = candidates[-1]
+        return result
 
     raise ValueError(f"Could not extract JSON from response: {text[:200]}...")

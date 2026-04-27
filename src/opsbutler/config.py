@@ -19,6 +19,7 @@ class LLMConfig:
     batch_size: int = 50
     max_workers: int = 4
     timeout: int = 300
+    json_retry_count: int = 2
 
 
 @dataclass
@@ -91,6 +92,7 @@ def _dict_to_config(data: dict) -> Config:
             batch_size=int(llm_data.get("batch_size", 50)),
             max_workers=int(llm_data.get("max_workers", 4)),
             timeout=int(llm_data.get("timeout", 300)),
+            json_retry_count=int(llm_data.get("json_retry_count", 2)),
         ),
         excel=ExcelConfig(
             action_column_candidates=excel_data.get("action_column_candidates", ["操作类型", "操作", "变更事项", "变更类型"]),

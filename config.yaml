@@ -11,6 +11,7 @@ llm:
   batch_size: 50
   max_workers: 4
   timeout: 300
+  json_retry_count: 2
 
 excel:
   action_column_candidates:
